@@ -1,0 +1,20 @@
+# Calendario económico México–EUA
+
+[build]
+  # No hay paso de compilación: la página es estática y Netlify empaqueta las funciones.
+  publish = "public"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  directory = "netlify/functions"
+  # El calendario y las correcciones viajan dentro del paquete de cada función.
+  included_files = ["data/calendario.csv", "data/correcciones.json"]
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"

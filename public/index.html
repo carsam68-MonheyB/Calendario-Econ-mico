@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendario económico</title>
+<meta name="description" content="Indicadores económicos de México y Estados Unidos, octubre a diciembre de 2026, con el dato real en cuanto se publica.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2f4f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1418" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5c66'/%3E%3Cpath d='M8 21l5-6 4 4 7-9' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<style>
+:root {
+  --fondo: #f2f4f3;
+  --superficie: #ffffff;
+  --superficie-2: #f6f8f7;
+  --tinta: #13202a;
+  --tinta-2: #4b5967;
+  --tinta-3: #66737f;
+  --linea: #dde3e7;
+  --linea-fuerte: #c3ccd3;
+  --acento: #0f5c66;
+  --acento-suave: #dcedef;
+  --hoy: #eaf3f8;
+  --favorable: #0b7a47;
+  --favorable-fondo: #e2f3ea;
+  --desfavorable: #b3261e;
+  --desfavorable-fondo: #fbe8e6;
+  --neutral: #3f5c86;
+  --neutral-fondo: #e5ecf6;
+  --en-linea: #5c6873;
+  --en-linea-fondo: #eceff1;
+  --retrasado: #8f5300;
+  --retrasado-fondo: #fdf0dc;
+  --sombra-popover: 0 8px 28px rgb(19 32 42 / 0.16);
+  --radio: 8px;
+  --letra: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --letra-titulo: "Newsreader", Georgia, "Times New Roman", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #0d1418;
+    --superficie: #141d23;
+    --superficie-2: #18232a;
+    --tinta: #e4ebf0;
+    --tinta-2: #a8b5c0;
+    --tinta-3: #8795a1;
+    --linea: #24313a;
+    --linea-fuerte: #364650;
+    --acento: #5cc3cf;
+    --acento-suave: #12343a;
+    --hoy: #13282f;
+    --favorable: #4cc38a;
+    --favorable-fondo: #12301f;
+    --desfavorable: #ff7b6f;
+    --desfavorable-fondo: #3a1715;
+    --neutral: #9db6da;
+    --neutral-fondo: #1a2636;
+    --en-linea: #a3afb9;
+    --en-linea-fondo: #222c33;
+    --retrasado: #f2b24c;
+    --retrasado-fondo: #33250f;
+    --sombra-popover: 0 8px 28px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--letra);
+  font-size: 15px;
+  line-height: 1.4;
+}
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--acento); }
+:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; border-radius: 4px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.num, .num * { font-variant-numeric: tabular-nums; }
+
+/* Cabecera */
+.cabecera {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 16px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.cabecera h1 {
+  margin: 0;
+  font-family: var(--letra-titulo);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.cabecera__sub { margin: 6px 0 0; color: var(--tinta-2); font-size: 14px; }
+.cabecera__estado { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.frescura { margin: 0; font-size: 13px; color: var(--tinta-2); display: flex; align-items: center; gap: 6px; }
+.frescura::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--favorable); flex: none;
+}
+.frescura[data-tono="error"] { color: var(--desfavorable); }
+.frescura[data-tono="error"]::before { background: var(--desfavorable); }
+.frescura[data-tono="cargando"]::before { background: var(--linea-fuerte); }
+.boton {
+  border: 1px solid var(--linea-fuerte);
+  background: var(--superficie);
+  border-radius: var(--radio);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.boton:hover { border-color: var(--tinta-3); }
+.boton[aria-pressed="true"] { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
+
+/* Filtros */
+.filtros {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--fondo) 92%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--linea);
+}
+.filtros__interior {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.segmentos {
+  display: inline-flex;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  padding: 2px;
+}
+.segmentos button {
+  border: 0;
+  background: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tinta-2);
+  cursor: pointer;
+}
+.segmentos button[aria-pressed="true"] { background: var(--tinta); color: var(--superficie); }
+.campo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tinta-2); }
+.campo select, .campo input {
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  padding: 5px 8px;
+  font-size: 13px;
+  color: var(--tinta);
+}
+.campo--busqueda { flex: 1 1 180px; }
+.campo--busqueda input { width: 100%; min-width: 0; }
+
+/* Contenido */
+main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
+.aviso {
+  margin: 24px 0;
+  padding: 14px 16px;
+  border-radius: var(--radio);
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  color: var(--tinta-2);
+}
+.aviso--error { border-color: var(--desfavorable); color: var(--desfavorable); }
+.semana { margin-top: 28px; }
+.semana__cabecera { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 8px; }
+.semana__cabecera h2 {
+  margin: 0;
+  font-family: var(--letra-titulo);
+  font-weight: 500;
+  font-size: 21px;
+  letter-spacing: -0.005em;
+}
+.nota-semana {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--neutral);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nota-semana::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.tabla {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--superficie);
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tabla th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--tinta-3);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--linea);
+  background: var(--superficie-2);
+}
+.tabla th.num { text-align: right; }
+.tabla td { padding: 10px 12px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+.tabla tbody tr:last-child td { border-bottom: 0; }
+.tabla td.num { text-align: right; white-space: nowrap; }
+.col-fecha { width: 108px; }
+.col-pais { width: 104px; }
+.col-esperado { width: 128px; }
+.col-real { width: 140px; }
+.col-var { width: 150px; }
+
+.fila { scroll-margin-top: 72px; }
+.fila.es-hoy td { background: var(--hoy); }
+.fila.es-hoy td:first-child { box-shadow: inset 3px 0 0 var(--acento); }
+.c-fecha .fecha { display: block; font-weight: 600; white-space: nowrap; }
+.c-fecha .hora { display: block; color: var(--tinta-2); font-size: 13px; }
+.fecha--repetida .fecha { visibility: hidden; }
+.etiqueta-hoy {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acento);
+}
+.pais { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.bandera { width: 20px; height: 14px; flex: none; border-radius: 2px; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.14); display: block; }
+@media (prefers-color-scheme: dark) { .bandera { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22); } }
+.c-indicador .nombre { font-weight: 500; }
+.c-indicador .bandera { display: none; }
+.detalle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; font-size: 13px; color: var(--tinta-2); }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--linea-fuerte);
+  color: var(--tinta-2);
+  white-space: nowrap;
+}
+.chip--impacto::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--acento); }
+.chip--nuevo { background: var(--acento); border-color: var(--acento); color: var(--superficie); font-weight: 600; }
+.solo-movil { display: none; }
+.chip--publicado { color: var(--tinta-3); }
+
+.valor { font-weight: 600; font-size: 15px; }
+.unidad { margin-left: 3px; font-size: 12px; color: var(--tinta-3); font-weight: 400; }
+.sin-valor { color: var(--tinta-3); }
+.linea-sec { display: block; margin-top: 3px; font-size: 12px; color: var(--tinta-3); }
+.estado { font-size: 13px; color: var(--tinta-3); display: inline-flex; align-items: center; gap: 6px; }
+.estado--esperando { color: var(--acento); font-weight: 500; }
+.estado--esperando::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  animation: latido 1.6s ease-in-out infinite;
+}
+.estado--retrasado { color: var(--retrasado); font-weight: 500; }
+.real-cabeza { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.info {
+  border: 0;
+  background: none;
+  padding: 2px;
+  margin: 0 0 0 2px;
+  vertical-align: -2px;
+  cursor: pointer;
+  color: var(--tinta-3);
+  border-radius: 50%;
+}
+.info:hover { color: var(--acento); }
+.info svg { display: block; width: 14px; height: 14px; }
+
+/* La columna de variación es la pieza principal */
+.var {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  font-size: 15.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: -0.01em;
+}
+.var .flecha { font-size: 10px; }
+.var--favorable { color: var(--favorable); background: var(--favorable-fondo); }
+.var--desfavorable { color: var(--desfavorable); background: var(--desfavorable-fondo); }
+.var--neutral { color: var(--neutral); background: var(--neutral-fondo); }
+.var--en-linea { color: var(--en-linea); background: var(--en-linea-fondo); font-weight: 600; font-size: 14px; }
+.var-dif { display: block; margin-top: 4px; font-size: 12px; color: var(--tinta-2); }
+
+.nota-dia td {
+  font-size: 13px;
+  color: var(--tinta-2);
+  background: var(--superficie-2);
+}
+.nota-dia .fecha { font-weight: 600; margin-right: 8px; color: var(--tinta); }
+
+.resaltar td { animation: destello 2.4s ease-out 1; }
+
+.pie { max-width: 1120px; margin: 0 auto; padding: 0 16px 40px; font-size: 12.5px; color: var(--tinta-3); }
+.pie p { margin: 4px 0; }
+
+.popover {
+  margin: 0;
+  inset: auto;
+  position: fixed;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--radio);
+  background: var(--superficie);
+  color: var(--tinta);
+  box-shadow: var(--sombra-popover);
+  font-size: 13px;
+}
+.popover p { margin: 0 0 4px; }
+.popover p:last-child { margin-bottom: 0; }
+.popover .popover__titulo { font-weight: 600; margin-bottom: 6px; }
+.popover .tenue { color: var(--tinta-2); }
+
+@keyframes latido { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes destello { 0% { background: var(--acento-suave); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Celular: cada evento es un bloque de tres líneas */
+@media (max-width: 639.98px) {
+  body { font-size: 14px; }
+  .cabecera { padding-top: 20px; }
+  .cabecera h1 { font-size: 26px; }
+  /* En celular los filtros no se quedan fijos: el espacio vertical es para los datos. */
+  .filtros { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .filtros__interior { gap: 8px; padding: 10px 16px; }
+  .campo--busqueda { flex-basis: 100%; }
+  .semana { margin-top: 22px; }
+  .tabla, .tabla tbody, .tabla tr, .tabla td { display: block; }
+  .tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tabla td { border-bottom: 0; padding: 0; }
+  .tabla .fila {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.15fr;
+    grid-template-areas: "fecha fecha fecha" "ind ind ind" "esp real var";
+    gap: 2px 10px;
+    padding: 11px 14px 12px;
+    border-bottom: 1px solid var(--linea);
+    scroll-margin-top: 12px;
+  }
+  .tabla tbody tr:last-child { border-bottom: 0; }
+  .tabla .fila.es-hoy { background: var(--hoy); box-shadow: inset 3px 0 0 var(--acento); }
+  .tabla .fila.es-hoy td { background: none; box-shadow: none; }
+  .tabla .c-fecha { grid-area: fecha; display: flex; gap: 6px; align-items: baseline; font-size: 12.5px; }
+  .tabla .c-fecha .fecha, .tabla .c-fecha .hora { display: inline; font-size: 12.5px; }
+  .tabla .c-fecha .fecha { color: var(--tinta-2); font-weight: 600; }
+  .tabla .c-fecha .hora::before { content: "· "; }
+  .tabla .fecha--repetida .fecha { visibility: visible; }
+  .tabla .c-pais { display: none; }
+  .tabla .c-indicador { grid-area: ind; margin-bottom: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+  .c-indicador .encabezado { display: flex; align-items: center; gap: 8px; }
+  .c-indicador .bandera { display: block; }
+  .c-indicador .detalle { margin-top: 0; }
+  .tabla td.c-esperado { grid-area: esp; text-align: left; }
+  .tabla td.c-real { grid-area: real; text-align: left; }
+  .tabla td.c-var { grid-area: var; text-align: right; }
+  .tabla .c-esperado::before, .tabla .c-real::before, .tabla .c-var::before {
+    content: attr(data-etiqueta);
+    display: block;
+    font-size: 11.5px;
+    color: var(--tinta-3);
+    margin-bottom: 2px;
+  }
+  .real-cabeza { justify-content: flex-start; }
+  .solo-escritorio { display: none; }
+  .tabla .c-fecha .solo-movil { display: inline-flex; margin-left: auto; align-self: center; }
+  .tabla td.num { white-space: normal; }
+  .tabla .nota-dia { padding: 10px 14px; border-bottom: 1px solid var(--linea); background: var(--superficie-2); }
+  .tabla .nota-dia td { background: none; }
+}
+</style>
+</head>
+<body>
+<header class="cabecera">
+  <div>
+    <h1>Calendario económico</h1>
+    <p class="cabecera__sub">México y EUA · 30 sep a 31 dic 2026 · Horas del centro de México</p>
+  </div>
+  <div class="cabecera__estado">
+    <p id="frescura" class="frescura" data-tono="cargando" role="status">Cargando…</p>
+    <button id="avisos" class="boton" type="button" hidden>Activar avisos</button>
+  </div>
+</header>
+
+<nav class="filtros" aria-label="Filtros">
+  <div class="filtros__interior">
+    <div class="segmentos" role="group" aria-label="País">
+      <button type="button" data-filtro="pais" data-valor="todos">Todos</button>
+      <button type="button" data-filtro="pais" data-valor="MX">México</button>
+      <button type="button" data-filtro="pais" data-valor="US">EUA</button>
+    </div>
+    <label class="campo">Mes
+      <select id="filtro-mes">
+        <option value="todos">Todos</option>
+        <option value="10">Octubre</option>
+        <option value="11">Noviembre</option>
+        <option value="12">Diciembre</option>
+      </select>
+    </label>
+    <div class="segmentos" role="group" aria-label="Estado">
+      <button type="button" data-filtro="estado" data-valor="todos">Todos</button>
+      <button type="button" data-filtro="estado" data-valor="pendientes">Pendientes</button>
+      <button type="button" data-filtro="estado" data-valor="publicados">Publicados</button>
+    </div>
+    <label class="campo campo--busqueda">
+      <span class="sr-only">Buscar indicador</span>
+      <input id="filtro-texto" type="search" placeholder="Buscar indicador" autocomplete="off" spellcheck="false">
+    </label>
+  </div>
+</nav>
+
+<main id="contenido" aria-busy="true">
+  <p class="aviso">Cargando el calendario…</p>
+</main>
+
+<footer class="pie" id="pie">
+  <p>Variación % = (real − esperado) / |esperado|. Verde es favorable, rojo desfavorable y azul grisáceo sin juicio.</p>
+</footer>
+
+<div id="popover" class="popover" popover></div>
+
+<noscript><p class="aviso">Esta página necesita JavaScript para mostrar los datos.</p></noscript>
+
+<script type="module">
+const API = '/api/datos';
+const RAPIDO_MS = 30_000;
+const LENTO_MS = 10 * 60_000;
+const ANTES_MS = 2 * 60_000;
+const DESPUES_MS = 30 * 60_000;
+const NUEVO_MS = 10 * 60_000;
+const DESFASE_CDMX_MS = 6 * 3_600_000;
+
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const PAISES = { MX: 'México', US: 'EUA' };
+
+const FERIADOS = [
+  { fecha: '2026-10-12', pais: 'US', nombre: 'Día de la Raza (Columbus Day)' },
+  { fecha: '2026-11-02', pais: 'MX', nombre: 'Día de Muertos' },
+  { fecha: '2026-11-11', pais: 'US', nombre: 'Día de los Veteranos' },
+  { fecha: '2026-11-16', pais: 'MX', nombre: 'Día de la Revolución' },
+  { fecha: '2026-11-26', pais: 'US', nombre: 'Día de Acción de Gracias' },
+  { fecha: '2026-12-25', pais: 'MX', nombre: 'Navidad' },
+  { fecha: '2026-12-25', pais: 'US', nombre: 'Navidad' },
+];
+const SILENCIO_FED = [
+  { desde: '2026-10-17', hasta: '2026-10-29', texto: 'Periodo de silencio de la Fed: del 17 al 29 de octubre' },
+  { desde: '2026-11-28', hasta: '2026-12-10', texto: 'Periodo de silencio de la Fed: del 28 de noviembre al 10 de diciembre' },
+];
+
+// Unidad: sufijo pegado al número y nota pequeña a la derecha.
+const UNIDADES = {
+  '%': { sufijo: '%', nota: '' },
+  '% a/a': { sufijo: '%', nota: 'a/a' },
+  '% m/m': { sufijo: '%', nota: 'm/m' },
+  '% t/t': { sufijo: '%', nota: 't/t' },
+  '% t/t anualizado': { sufijo: '%', nota: 't/t anual.' },
+  'miles': { sufijo: '', nota: 'mil' },
+  'millones': { sufijo: '', nota: 'mill.' },
+  'mmd USD': { sufijo: '', nota: 'mmd' },
+  'mdd': { sufijo: '', nota: 'mdd' },
+  'índice': { sufijo: '', nota: 'pts' },
+};
+const NOMBRES_FUENTE = { Dataset: 'Captura inicial del calendario', Manual: 'Corrección manual' };
+const ETIQUETAS_ESTADO = {
+  pendiente: 'Pendiente',
+  esperando: 'Esperando dato',
+  retrasado: 'Retrasado',
+  'sin-fuente': 'Sin fuente automática',
+  publicado: 'Publicado',
+};
+
+const BANDERA_MX = '<svg class="bandera" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/><rect width="6.67" height="14" fill="#006847"/><rect x="13.33" width="6.67" height="14" fill="#CE1126"/><circle cx="10" cy="7" r="1.9" fill="#8a5a2b"/></svg>';
+const BANDERA_US = (() => {
+  let franjas = '';
+  for (let i = 0; i < 13; i += 2) franjas += `<rect y="${(i * 14 / 13).toFixed(3)}" width="20" height="${(14 / 13).toFixed(3)}" fill="#B22234"/>`;
+  let estrellas = '';
+  for (let f = 0; f < 4; f++) for (let c = 0; c < 4; c++) estrellas += `<circle cx="${(1.1 + c * 1.95).toFixed(2)}" cy="${(1 + f * 1.75).toFixed(2)}" r="0.42" fill="#fff"/>`;
+  return `<svg class="bandera" viewBox="0 0 20 14" aria-hidden="true"><rect width="20" height="14" fill="#fff"/>${franjas}<rect width="8" height="${(7 * 14 / 13).toFixed(3)}" fill="#3C3B6E"/>${estrellas}</svg>`;
+})();
+const BANDERAS = { MX: BANDERA_MX, US: BANDERA_US };
+const ICONO_INFO = '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="4.9" r="0.95" fill="currentColor"/><path d="M8 7.3v4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+const estado = {
+  vista: null,
+  etag: null,
+  ultimoExito: null,
+  error: false,
+  temporizador: null,
+  primeraCarga: true,
+  firma: '',
+  filtros: { pais: 'todos', mes: 'todos', estado: 'todos', texto: '' },
+};
+
+/* Utilidades */
+const $ = (s) => document.querySelector(s);
+const escapar = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const normalizar = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const leerPreferencias = () => { try { return JSON.parse(localStorage.getItem('calendario:filtros') ?? 'null'); } catch { return null; } };
+const guardarPreferencias = () => { try { localStorage.setItem('calendario:filtros', JSON.stringify({ ...estado.filtros, texto: '' })); } catch {} };
+const leerResaltados = () => { try { return new Set(JSON.parse(localStorage.getItem('calendario:resaltados') ?? '[]')); } catch { return new Set(); } };
+const guardarResaltados = (s) => { try { localStorage.setItem('calendario:resaltados', JSON.stringify([...s].slice(-200))); } catch {} };
+
+function formatoNumero(valor, decimales) {
+  const texto = new Intl.NumberFormat('es-MX', { minimumFractionDigits: decimales, maximumFractionDigits: decimales }).format(Math.abs(valor));
+  return (valor < 0 && Number(texto.replace(/,/g, '')) !== 0 ? '−' : '') + texto;
+}
+function conSigno(valor, decimales) {
+  const texto = new Intl.NumberFormat('es-MX', { minimumFractionDigits: decimales, maximumFractionDigits: decimales }).format(Math.abs(valor));
+  if (Number(texto.replace(/,/g, '')) === 0) return texto;
+  return (valor > 0 ? '+' : '−') + texto;
+}
+function partesFecha(fecha) { const [a, m, d] = fecha.split('-').map(Number); return { a, m, d }; }
+function sumarDias(fecha, dias) { const { a, m, d } = partesFecha(fecha); return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10); }
+function diaSemana(fecha) { const { a, m, d } = partesFecha(fecha); return new Date(Date.UTC(a, m - 1, d)).getUTCDay(); }
+function fechaCorta(fecha) { const { m, d } = partesFecha(fecha); return `${DIAS[diaSemana(fecha)]} ${d} ${MESES[m - 1]}`; }
+function horaCorta(hora) { if (!hora) return '—'; const [h, mi] = hora.split(':'); return `${Number(h)}:${mi}`; }
+function hoyCdmx(ahora = Date.now()) { return new Date(ahora - DESFASE_CDMX_MS).toISOString().slice(0, 10); }
+function lunesDe(fecha) { return sumarDias(fecha, -((diaSemana(fecha) + 6) % 7)); }
+function etiquetaSemana(lunes) {
+  const viernes = sumarDias(lunes, 4);
+  const a = partesFecha(lunes), b = partesFecha(viernes);
+  return a.m === b.m
+    ? `Semana del ${a.d} al ${b.d} de ${MESES_LARGOS[b.m - 1]}`
+    : `Semana del ${a.d} de ${MESES_LARGOS[a.m - 1]} al ${b.d} de ${MESES_LARGOS[b.m - 1]}`;
+}
+const fechaHora = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Mexico_City' });
+const soloHora = new Intl.DateTimeFormat('es-MX', { hour: 'numeric', minute: '2-digit' });
+
+/* Estado de cada evento a esta hora */
+function estadoDe(e, ahora) {
+  if (e.real !== null) return 'publicado';
+  if (e.tipo === 'evento') return ahora < Date.parse(e.publicadoDesde) ? 'pendiente' : 'publicado';
+  if (ahora < Date.parse(e.inicio)) return 'pendiente';
+  if (!e.consultable) return 'sin-fuente';
+  return ahora < Date.parse(e.finEspera) ? 'esperando' : 'retrasado';
+}
+const esNuevo = (e, ahora) => e.real !== null && e.realFuente && ahora - Date.parse(e.realFuente.obtenido) < NUEVO_MS;
+
+/* Valores */
+function textoValor(e, valor) {
+  const u = UNIDADES[e.unidad] ?? { sufijo: '', nota: e.unidad };
+  return formatoNumero(valor, e.decimales) + u.sufijo + (u.nota ? ` ${u.nota}` : '');
+}
+function htmlValor(e, valor) {
+  const u = UNIDADES[e.unidad] ?? { sufijo: '', nota: e.unidad };
+  return `<span class="valor">${formatoNumero(valor, e.decimales)}${u.sufijo}</span>${u.nota ? `<span class="unidad">${escapar(u.nota)}</span>` : ''}`;
+}
+function botonInfo(e, campo, etiqueta) {
+  return `<button class="info" type="button" data-info="${campo}" data-id="${escapar(e.id)}" aria-label="${etiqueta}" popovertarget="popover">${ICONO_INFO}</button>`;
+}
+function htmlEsperado(e) {
+  if (e.tipo === 'evento' || e.esperado === null) return '<span class="sin-valor">—</span>';
+  return htmlValor(e, e.esperado) + botonInfo(e, 'esperado', 'Fuente del esperado');
+}
+function htmlReal(e, est, ahora) {
+  if (e.tipo === 'evento') return '<span class="sin-valor">—</span>';
+  if (e.real === null) return `<span class="estado estado--${est}">${ETIQUETAS_ESTADO[est]}</span>`;
+  const nuevo = esNuevo(e, ahora) ? '<span class="chip chip--nuevo solo-escritorio">Nuevo</span>' : '';
+  let html = `<span class="real-cabeza">${nuevo}<span>${htmlValor(e, e.real)}${botonInfo(e, 'real', 'Fuente del dato real')}</span></span>`;
+  if (e.revision !== null) {
+    html += `<span class="linea-sec">Revisado: ${escapar(textoValor(e, e.revision))}</span>`;
+  }
+  return html;
+}
+function htmlVariacion(e) {
+  const v = e.variacion;
+  if (!v) return '<span class="sin-valor">—</span>';
+  if (v.tono === 'en-linea') return '<span class="var var--en-linea">En línea</span>';
+  const flecha = v.direccion === 'arriba' ? '▲' : '▼';
+  let html = `<span class="var var--${v.tono}"><span class="flecha" aria-hidden="true">${flecha}</span>${conSigno(v.pct, 1)}%</span>`;
+  if (v.unidadDiferencia === 'pp') html += `<span class="var-dif">${conSigno(v.diferencia, 2)} pp</span>`;
+  if (v.unidadDiferencia === 'pb') html += `<span class="var-dif">${conSigno(v.diferencia, 0)} pb</span>`;
+  const juicio = v.tono === 'favorable' ? 'favorable' : v.tono === 'desfavorable' ? 'desfavorable' : 'sin juicio';
+  return html + `<span class="sr-only">${v.direccion === 'arriba' ? 'arriba' : 'abajo'} de lo esperado, ${juicio}</span>`;
+}
+
+/* Filtros */
+function pasaFiltros(e, est) {
+  const f = estado.filtros;
+  if (f.pais !== 'todos' && e.pais !== f.pais) return false;
+  if (f.mes !== 'todos' && Number(e.fecha.slice(5, 7)) !== Number(f.mes)) return false;
+  if (f.estado === 'publicados' && est !== 'publicado') return false;
+  if (f.estado === 'pendientes' && est === 'publicado') return false;
+  if (f.texto && !normalizar(e.indicador).includes(normalizar(f.texto))) return false;
+  return true;
+}
+function feriadosVisibles(fecha) {
+  const f = estado.filtros;
+  if (f.estado !== 'todos' || f.texto) return [];
+  if (f.mes !== 'todos' && Number(fecha.slice(5, 7)) !== Number(f.mes)) return [];
+  return FERIADOS.filter((h) => h.fecha === fecha && (f.pais === 'todos' || f.pais === h.pais));
+}
+
+/* Render */
+function render({ desplazar = false } = {}) {
+  const vista = estado.vista;
+  if (!vista) return;
+  const ahora = Date.now();
+  const hoy = hoyCdmx(ahora);
+  const popover = $('#popover');
+  if (popover.matches(':popover-open')) popover.hidePopover();
+  const foco = document.activeElement?.closest('[data-info]');
+  const claveFoco = foco ? `${foco.dataset.id}|${foco.dataset.info}` : null;
+
+  const visibles = [];
+  for (const e of vista.eventos) {
+    const est = estadoDe(e, ahora);
+    if (pasaFiltros(e, est)) visibles.push({ e, est });
+  }
+
+  // Semanas de lunes a domingo; se incluyen los feriados aunque no tengan eventos.
+  const semanas = new Map();
+  const agregar = (fecha) => {
+    const lunes = lunesDe(fecha);
+    if (!semanas.has(lunes)) semanas.set(lunes, new Map());
+    const dias = semanas.get(lunes);
+    if (!dias.has(fecha)) dias.set(fecha, []);
+    return dias.get(fecha);
+  };
+  for (const v of visibles) agregar(v.e.fecha).push(v);
+  for (const h of FERIADOS) if (feriadosVisibles(h.fecha).length) agregar(h.fecha);
+
+  if (semanas.size === 0) {
+    $('#contenido').innerHTML = '<p class="aviso">No hay eventos con estos filtros.</p>';
+    return;
+  }
+
+  let html = '';
+  for (const lunes of [...semanas.keys()].sort()) {
+    const domingo = sumarDias(lunes, 6);
+    const idSemana = `semana-${lunes}`;
+    const notas = (estado.filtros.pais === 'MX' ? [] : SILENCIO_FED)
+      .filter((s) => s.desde <= domingo && s.hasta >= lunes)
+      .map((s) => `<p class="nota-semana">${escapar(s.texto)}</p>`).join('');
+    html += `<section class="semana" aria-labelledby="${idSemana}"><div class="semana__cabecera"><h2 id="${idSemana}">${etiquetaSemana(lunes)}</h2>${notas}</div>`;
+    html += '<table class="tabla"><colgroup><col class="col-fecha"><col class="col-pais"><col><col class="col-esperado"><col class="col-real"><col class="col-var"></colgroup>';
+    html += '<thead><tr><th scope="col">Fecha y hora</th><th scope="col">País</th><th scope="col">Indicador</th><th scope="col" class="num">Esperado</th><th scope="col" class="num">Real</th><th scope="col" class="num">Variación %</th></tr></thead><tbody>';
+    const dias = semanas.get(lunes);
+    for (const fecha of [...dias.keys()].sort()) {
+      const feriados = new Map();
+      for (const h of feriadosVisibles(fecha)) feriados.set(h.nombre, [...(feriados.get(h.nombre) ?? []), PAISES[h.pais]]);
+      for (const [nombre, paises] of feriados) {
+        html += `<tr class="nota-dia"><td colspan="6"><span class="fecha">${fechaCorta(fecha)}</span>Feriado en ${paises.join(' y ')}: ${escapar(nombre)}</td></tr>`;
+      }
+      dias.get(fecha).forEach(({ e, est }, i) => {
+        const clases = ['fila'];
+        if (e.fecha === hoy) clases.push('es-hoy');
+        const nuevo = esNuevo(e, ahora);
+        const chips = [];
+        if (e.altoImpacto) chips.push('<span class="chip chip--impacto">Alto impacto</span>');
+        if (e.tipo === 'evento') chips.push(`<span class="chip ${est === 'publicado' ? 'chip--publicado' : ''}">${ETIQUETAS_ESTADO[est]}</span>`);
+        const periodo = e.periodo ? `<span>${escapar(e.periodo)}</span>` : '';
+        html += `<tr class="${clases.join(' ')}" id="e-${escapar(e.id)}" data-id="${escapar(e.id)}" data-estado="${est}"${nuevo ? ' data-nuevo' : ''}>`;
+        html += `<td class="c-fecha${i > 0 ? ' fecha--repetida' : ''}"><span class="fecha">${fechaCorta(e.fecha)}${e.fecha === hoy ? '<span class="etiqueta-hoy">hoy</span>' : ''}</span><span class="hora">${horaCorta(e.hora)}</span>${nuevo ? '<span class="chip chip--nuevo solo-movil">Nuevo</span>' : ''}</td>`;
+        html += `<td class="c-pais"><span class="pais">${BANDERAS[e.pais]}${PAISES[e.pais]}</span></td>`;
+        html += `<td class="c-indicador"><div class="encabezado">${BANDERAS[e.pais]}<span class="nombre">${escapar(e.indicador)}</span><span class="sr-only">, ${PAISES[e.pais]}</span></div><div class="detalle">${periodo}${chips.join('')}</div></td>`;
+        html += `<td class="c-esperado num" data-etiqueta="Esperado">${htmlEsperado(e)}</td>`;
+        html += `<td class="c-real num" data-etiqueta="Real">${htmlReal(e, est, ahora)}</td>`;
+        html += `<td class="c-var num" data-etiqueta="Variación">${htmlVariacion(e)}</td>`;
+        html += '</tr>';
+      });
+    }
+    html += '</tbody></table></section>';
+  }
+  const main = $('#contenido');
+  main.innerHTML = html;
+  main.setAttribute('aria-busy', 'false');
+
+  if (claveFoco) {
+    const [id, campo] = claveFoco.split('|');
+    document.querySelector(`[data-info="${campo}"][data-id="${CSS.escape(id)}"]`)?.focus();
+  }
+  resaltarNuevos();
+  if (desplazar) desplazarAlProximo(visibles, ahora);
+}
+
+function firma(ahora) {
+  // Lo que cambia con el reloj: estados y etiquetas "Nuevo".
+  return estado.vista.eventos.map((e) => estadoDe(e, ahora) + (esNuevo(e, ahora) ? '*' : '')).join(',') + hoyCdmx(ahora);
+}
+
+function desplazarAlProximo(visibles, ahora) {
+  if (location.hash) return;
+  const hoy = hoyCdmx(ahora);
+  const proximo = visibles.find(({ e, est }) => e.fecha >= hoy && (est === 'esperando' || est === 'pendiente'));
+  if (!proximo) return;
+  const fila = document.getElementById(`e-${proximo.e.id}`);
+  if (!fila) return;
+  // Se deja visible el encabezado de la semana si cabe, y nada queda debajo de la barra de filtros.
+  const barra = getComputedStyle($('.filtros')).position === 'sticky' ? $('.filtros').offsetHeight : 0;
+  const semana = fila.closest('.semana');
+  const objetivo = semana && fila.getBoundingClientRect().top - semana.getBoundingClientRect().top < innerHeight * 0.4 ? semana : fila;
+  const suave = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  scrollTo({ top: objetivo.getBoundingClientRect().top + scrollY - barra - 12, behavior: suave ? 'smooth' : 'auto' });
+}
+
+/* Resaltado una sola vez y avisos */
+const resaltados = leerResaltados();
+const pendientesDeResaltar = new Set();
+function resaltarNuevos() {
+  const ahora = Date.now();
+  for (const e of estado.vista.eventos) {
+    if (esNuevo(e, ahora) && !resaltados.has(e.id)) pendientesDeResaltar.add(e.id);
+  }
+  for (const id of pendientesDeResaltar) {
+    const fila = document.getElementById(`e-${id}`);
+    if (!fila) continue;
+    fila.classList.add('resaltar');
+    resaltados.add(id);
+    pendientesDeResaltar.delete(id);
+  }
+  guardarResaltados(resaltados);
+}
+
+function avisar(nuevos) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  for (const e of nuevos) {
+    const pais = PAISES[e.pais];
+    let cuerpo = `${pais}, ${e.indicador}${e.periodo ? ` ${e.periodo}` : ''}: ${textoValor(e, e.real)}`;
+    if (e.esperado !== null) {
+      cuerpo += ` vs ${textoValor(e, e.esperado)} esperado`;
+      if (e.variacion && e.variacion.tono !== 'en-linea') cuerpo += ` (${conSigno(e.variacion.pct, 1)}%)`;
+      if (e.variacion?.tono === 'en-linea') cuerpo += ' (en línea)';
+    }
+    try { new Notification('Dato publicado', { body: cuerpo, tag: e.id, lang: 'es-MX' }); } catch {}
+  }
+}
+
+function prepararBotonAvisos() {
+  const boton = $('#avisos');
+  if (!('Notification' in window)) return;
+  const pintar = () => {
+    boton.hidden = false;
+    if (Notification.permission === 'granted') { boton.textContent = 'Avisos activos'; boton.setAttribute('aria-pressed', 'true'); boton.disabled = true; }
+    else if (Notification.permission === 'denied') { boton.textContent = 'Avisos bloqueados'; boton.disabled = true; boton.title = 'Actívalos en la configuración del navegador.'; }
+    else { boton.textContent = 'Activar avisos'; boton.setAttribute('aria-pressed', 'false'); }
+  };
+  boton.addEventListener('click', async () => { try { await Notification.requestPermission(); } catch {} pintar(); });
+  pintar();
+}
+
+/* Frescura */
+function pintarFrescura() {
+  const p = $('#frescura');
+  if (!estado.ultimoExito) {
+    p.dataset.tono = estado.error ? 'error' : 'cargando';
+    p.textContent = estado.error ? 'Sin conexión con el servidor. Reintentando…' : 'Cargando…';
+    return;
+  }
+  if (estado.error) {
+    p.dataset.tono = 'error';
+    p.textContent = `Sin conexión con el servidor. Último dato bueno: ${soloHora.format(estado.ultimoExito)}`;
+    return;
+  }
+  const minutos = Math.floor((Date.now() - estado.ultimoExito) / 60_000);
+  p.dataset.tono = 'ok';
+  p.textContent = minutos < 1 ? 'Actualizado hace menos de 1 min' : minutos < 60 ? `Actualizado hace ${minutos} min` : `Actualizado hace ${Math.floor(minutos / 60)} h`;
+}
+
+/* Carga y frecuencia de consulta */
+function siguienteEspera(ahora) {
+  let proxima = Infinity;
+  for (const e of estado.vista?.eventos ?? []) {
+    if (!e.consultable || e.real !== null || !e.hora) continue;
+    const inicio = Date.parse(e.inicio);
+    if (ahora >= inicio - ANTES_MS && ahora <= inicio + DESPUES_MS) return RAPIDO_MS;
+    if (inicio - ANTES_MS > ahora) proxima = Math.min(proxima, inicio - ANTES_MS);
+  }
+  return Math.max(1_000, Math.min(LENTO_MS, proxima - ahora));
+}
+
+function programar(espera) {
+  clearTimeout(estado.temporizador);
+  if (document.hidden) return;
+  estado.temporizador = setTimeout(cargar, espera ?? (estado.error ? RAPIDO_MS : siguienteEspera(Date.now())));
+}
+
+async function cargar() {
+  clearTimeout(estado.temporizador);
+  try {
+    const respuesta = await fetch(API, { cache: 'no-store', headers: estado.etag ? { 'If-None-Match': estado.etag } : {} });
+    if (respuesta.status === 304) {
+      estado.ultimoExito = Date.now();
+      estado.error = false;
+    } else if (respuesta.ok) {
+      const vista = await respuesta.json();
+      const previos = new Map((estado.vista?.eventos ?? []).map((e) => [e.id, e]));
+      const nuevos = estado.vista ? vista.eventos.filter((e) => e.real !== null && previos.get(e.id)?.real === null) : [];
+      estado.vista = vista;
+      estado.etag = respuesta.headers.get('ETag');
+      estado.ultimoExito = Date.now();
+      estado.error = false;
+      for (const e of nuevos) { resaltados.delete(e.id); pendientesDeResaltar.add(e.id); }
+      pintarPie();
+      render({ desplazar: estado.primeraCarga });
+      estado.firma = firma(Date.now());
+      estado.primeraCarga = false;
+      avisar(nuevos);
+    } else {
+      throw new Error(`HTTP ${respuesta.status}`);
+    }
+  } catch {
+    estado.error = true;
+    if (!estado.vista) {
+      $('#contenido').innerHTML = '<p class="aviso aviso--error">No se pudo cargar el calendario. Reintentando en 30 segundos…</p>';
+    }
+  }
+  pintarFrescura();
+  programar();
+}
+
+function pintarPie() {
+  const v = estado.vista;
+  const real = v.modoReal === 'tradingeconomics' ? 'Trading Economics' : 'fuentes oficiales (BLS, BEA, Census, Fed, INEGI y Banxico)';
+  const esperado = { tradingeconomics: 'consenso de Trading Economics', claude: 'consenso del mercado buscado por Claude', ninguna: 'sin fuente; la variación queda vacía' }[v.modoConsenso];
+  $('#pie').innerHTML = `<p>Dato real: ${real}. Esperado: ${esperado}.</p><p>Variación % = (real − esperado) / |esperado|. Verde es favorable, rojo desfavorable y azul grisáceo sin juicio. Las flechas indican si el real quedó arriba o abajo de lo esperado.</p><p>Horas del centro de México (UTC−6). <a href="/api/estado">Estado de las fuentes</a></p>`;
+}
+
+/* Popover de fuente */
+document.addEventListener('click', (ev) => {
+  const boton = ev.target.closest('[data-info]');
+  if (!boton) return;
+  const e = estado.vista?.eventos.find((x) => x.id === boton.dataset.id);
+  if (!e) return;
+  const campo = boton.dataset.info;
+  const fuente = campo === 'esperado' ? e.esperadoFuente : e.realFuente;
+  const valor = campo === 'esperado' ? e.esperado : e.real;
+  const popover = $('#popover');
+  let html = `<p class="popover__titulo">${campo === 'esperado' ? 'Esperado' : 'Dato real'}: ${escapar(textoValor(e, valor))}</p>`;
+  if (fuente) {
+    html += `<p>Fuente: ${escapar(NOMBRES_FUENTE[fuente.nombre] ?? fuente.nombre)}</p>`;
+    html += `<p class="tenue">Obtenido: ${escapar(fechaHora.format(new Date(fuente.obtenido)))}</p>`;
+    if (fuente.url && /^https:\/\//.test(fuente.url)) html += `<p><a href="${escapar(fuente.url)}" target="_blank" rel="noopener noreferrer">Ver fuente</a></p>`;
+  }
+  if (campo === 'real' && e.revision !== null && e.revisionFuente) {
+    html += `<p class="tenue">Revisado a ${escapar(textoValor(e, e.revision))} el ${escapar(fechaHora.format(new Date(e.revisionFuente.obtenido)))}. La variación usa la primera cifra.</p>`;
+  }
+  popover.innerHTML = html;
+  requestAnimationFrame(() => {
+    const r = boton.getBoundingClientRect();
+    const ancho = popover.offsetWidth;
+    const alto = popover.offsetHeight;
+    const izquierda = Math.min(Math.max(16, r.right - ancho), innerWidth - ancho - 16);
+    const arriba = r.bottom + 8 + alto > innerHeight ? r.top - alto - 8 : r.bottom + 8;
+    popover.style.left = `${izquierda}px`;
+    popover.style.top = `${Math.max(8, arriba)}px`;
+  });
+});
+
+/* Filtros */
+function pintarFiltros() {
+  for (const b of document.querySelectorAll('[data-filtro]')) {
+    b.setAttribute('aria-pressed', String(estado.filtros[b.dataset.filtro] === b.dataset.valor));
+  }
+  $('#filtro-mes').value = estado.filtros.mes;
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-filtro]');
+  if (!b) return;
+  estado.filtros[b.dataset.filtro] = b.dataset.valor;
+  pintarFiltros();
+  guardarPreferencias();
+  render();
+});
+$('#filtro-mes').addEventListener('change', (ev) => { estado.filtros.mes = ev.target.value; guardarPreferencias(); render(); });
+let temporizadorTexto;
+$('#filtro-texto').addEventListener('input', (ev) => {
+  clearTimeout(temporizadorTexto);
+  temporizadorTexto = setTimeout(() => { estado.filtros.texto = ev.target.value; render(); }, 120);
+});
+
+/* Pestaña oculta: se pausa la consulta y se actualiza al volver */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) clearTimeout(estado.temporizador);
+  else cargar();
+});
+
+/* Cada 30 s: frescura, estados por hora y etiquetas "Nuevo" */
+setInterval(() => {
+  pintarFrescura();
+  if (!estado.vista || document.hidden) return;
+  const f = firma(Date.now());
+  if (f !== estado.firma) { estado.firma = f; render(); }
+}, 30_000);
+
+const preferencias = leerPreferencias();
+if (preferencias) Object.assign(estado.filtros, preferencias, { texto: '' });
+pintarFiltros();
+prepararBotonAvisos();
+cargar();
+</script>
+</body>
+</html>

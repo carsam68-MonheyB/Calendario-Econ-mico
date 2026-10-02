@@ -30,7 +30,7 @@ const CATALOGO: Record<string, Indicador> = {
   'US|PCE subyacente anual': { clave: 'us.pce-subyacente', decimales: 1, altoImpacto: true },
   'US|Índice de costo del empleo (ECI)': { clave: 'us.eci', decimales: 1, altoImpacto: false },
   'US|Elecciones intermedias': { clave: 'us.elecciones', decimales: 0, altoImpacto: false },
-  'US|Vacantes JOLTS': { clave: 'us.jolts', decimales: 2, altoImpacto: false },
+  'US|Vacantes JOLTS': { clave: 'us.jolts', decimales: 1, altoImpacto: false },
   'US|Libro Beige': { clave: 'us.libro-beige', decimales: 0, altoImpacto: false },
   'US|Cuenta corriente': { clave: 'us.cuenta-corriente', decimales: 1, altoImpacto: false },
 
@@ -45,7 +45,7 @@ const CATALOGO: Record<string, Indicador> = {
   'MX|Ventas minoristas': { clave: 'mx.ventas-minoristas', decimales: 1, altoImpacto: false },
   'MX|Tasa de desempleo': { clave: 'mx.desempleo', decimales: 1, altoImpacto: false },
   'MX|IGAE': { clave: 'mx.igae', decimales: 1, altoImpacto: false },
-  'MX|Balanza comercial': { clave: 'mx.balanza', decimales: 0, altoImpacto: false },
+  'MX|Balanza comercial': { clave: 'mx.balanza', decimales: 1, altoImpacto: false },
   'MX|Decisión de Banxico (tasa objetivo)': { clave: 'mx.banxico', decimales: 2, altoImpacto: true },
   'MX|PIB oportuno': { clave: 'mx.pib-oportuno', decimales: 1, altoImpacto: true },
   'MX|Finanzas públicas': { clave: 'mx.finanzas-publicas', decimales: 0, altoImpacto: false },
