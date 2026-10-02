@@ -1,0 +1,21 @@
+{
+  "name": "calendario-economico",
+  "private": true,
+  "type": "module",
+  "description": "Calendario económico México–EUA con el dato real automático",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.3",
+    "@netlify/functions": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^6.0.2"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

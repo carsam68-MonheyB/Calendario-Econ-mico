@@ -141,3 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Netlify CLI: estado local y Blobs de prueba
+.netlify/
