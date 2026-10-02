@@ -8,7 +8,7 @@ import { consensoVacio, firmaValida, registrarFuente, registrarIntento } from '.
 import { consultarConsenso, MODELO_POR_OMISION } from '../../src/organismos/claude.ts';
 import { ErrorFuente, sanitizar } from '../../src/red.ts';
 
-const SIMULTANEAS = 2;
+const SIMULTANEAS = 4;
 
 export default async (req: Request) => {
   const config = leerConfiguracion();
