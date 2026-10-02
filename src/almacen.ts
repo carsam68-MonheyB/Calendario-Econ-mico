@@ -1,6 +1,8 @@
 // Acceso a Netlify Blobs. Las funciones leen y escriben solo a través de esta interfaz.
+// Cada llave tiene un solo escritor: "datos" y "estado" la función programada; "consenso" quien busca el esperado.
 
 import { getStore } from '@netlify/blobs';
+import type { DatosConsenso } from './consenso.ts';
 import type { Datos, EstadoServicio } from './modelo.ts';
 
 export interface Almacen {
@@ -8,6 +10,8 @@ export interface Almacen {
   guardarDatos(datos: Datos): Promise<void>;
   leerEstado(): Promise<EstadoServicio | null>;
   guardarEstado(estado: EstadoServicio): Promise<void>;
+  leerConsenso(): Promise<DatosConsenso | null>;
+  guardarConsenso(consenso: DatosConsenso): Promise<void>;
 }
 
 export const STORE = 'calendario';
@@ -15,40 +19,46 @@ export const STORE = 'calendario';
 export function almacenBlobs(): Almacen {
   // Lectura fuerte: la página debe ver el dato en cuanto la función lo guarda.
   const store = getStore({ name: STORE, consistency: 'strong' });
+  const leer = async <T>(llave: string) => ((await store.get(llave, { type: 'json' })) as T | null) ?? null;
   return {
-    leerDatos: async () => ((await store.get('datos', { type: 'json' })) as Datos | null) ?? null,
+    leerDatos: () => leer<Datos>('datos'),
     guardarDatos: async (datos) => {
       await store.setJSON('datos', datos);
     },
-    leerEstado: async () => ((await store.get('estado', { type: 'json' })) as EstadoServicio | null) ?? null,
+    leerEstado: () => leer<EstadoServicio>('estado'),
     guardarEstado: async (estado) => {
       await store.setJSON('estado', estado);
+    },
+    leerConsenso: () => leer<DatosConsenso>('consenso'),
+    guardarConsenso: async (consenso) => {
+      await store.setJSON('consenso', consenso);
     },
   };
 }
 
-/** Almacén en memoria para pruebas. Cuenta las escrituras. */
-export function almacenMemoria(inicial: { datos?: Datos; estado?: EstadoServicio } = {}) {
-  let datos = inicial.datos ? structuredClone(inicial.datos) : null;
-  let estado = inicial.estado ? structuredClone(inicial.estado) : null;
-  const conteo = { lecturas: 0, escriturasDatos: 0, escriturasEstado: 0 };
+/** Almacén en memoria para pruebas. Cuenta las lecturas y escrituras. */
+export function almacenMemoria(inicial: { datos?: Datos; estado?: EstadoServicio; consenso?: DatosConsenso } = {}) {
+  const copia = <T>(x: T | undefined | null): T | null => (x ? structuredClone(x) : null);
+  let datos = copia(inicial.datos);
+  let estado = copia(inicial.estado);
+  let consenso = copia(inicial.consenso);
+  const conteo = { lecturas: 0, escriturasDatos: 0, escriturasEstado: 0, escriturasConsenso: 0 };
   const almacen: Almacen = {
-    leerDatos: async () => {
-      conteo.lecturas++;
-      return datos ? structuredClone(datos) : null;
-    },
+    leerDatos: async () => (conteo.lecturas++, copia(datos)),
     guardarDatos: async (d) => {
       conteo.escriturasDatos++;
       datos = structuredClone(d);
     },
-    leerEstado: async () => {
-      conteo.lecturas++;
-      return estado ? structuredClone(estado) : null;
-    },
+    leerEstado: async () => (conteo.lecturas++, copia(estado)),
     guardarEstado: async (e) => {
       conteo.escriturasEstado++;
       estado = structuredClone(e);
     },
+    leerConsenso: async () => (conteo.lecturas++, copia(consenso)),
+    guardarConsenso: async (c) => {
+      conteo.escriturasConsenso++;
+      consenso = structuredClone(c);
+    },
   };
-  return { almacen, conteo, actual: () => ({ datos, estado }) };
+  return { almacen, conteo, actual: () => ({ datos, estado, consenso }) };
 }

@@ -3,6 +3,7 @@
 import type { FilaCalendario, Mejor, Pais, Tipo } from './calendario.ts';
 import { calcularVariacion, type Variacion } from './calculos.ts';
 import { VARIABLES_DE_LLAVES, type Configuracion, type Llaves } from './config.ts';
+import { aplicarConsensos, type DatosConsenso } from './consenso.ts';
 import { aplicarCorrecciones, type Correccion } from './correcciones.ts';
 import { sincronizar } from './datos.ts';
 import { indicadorDe } from './indicadores.ts';
@@ -68,6 +69,7 @@ function ordenar(a: FilaCalendario | EventoGuardado, b: FilaCalendario | EventoG
 export function construirVista(entrada: {
   calendario: FilaCalendario[];
   datos: Datos | null;
+  consenso: DatosConsenso | null;
   correcciones: Correccion[];
   config: Configuracion;
   esConsultable: (fila: FilaCalendario | EventoGuardado) => boolean;
@@ -77,6 +79,7 @@ export function construirVista(entrada: {
   const datos = sincronizar(calendario, entrada.datos, ahora);
   // Las correcciones se ven desde el siguiente deploy, aunque la función programada aún no corra.
   aplicarCorrecciones(datos.eventos, correcciones, ahora);
+  aplicarConsensos(datos.eventos, entrada.consenso);
 
   const eventos = [...datos.eventos].sort(ordenar).map((e): EventoVista => {
     const meta = indicadorDe(e);
@@ -122,6 +125,7 @@ export function construirVista(entrada: {
 
 export function construirEstado(entrada: {
   estado: EstadoServicio | null;
+  consenso: DatosConsenso | null;
   config: Configuracion;
   errorCorrecciones: string | null;
   ahora: Date;
@@ -139,5 +143,13 @@ export function construirEstado(entrada: {
     llavesConfiguradas,
     correcciones: errorCorrecciones ?? 'sin errores',
     fuentes: estado?.fuentes ?? {},
+    consenso: {
+      fuentes: entrada.consenso?.fuentes ?? {},
+      conValor: Object.values(entrada.consenso?.eventos ?? {}).filter((c) => c.valor !== null).length,
+      sinConsensoClaro: Object.values(entrada.consenso?.eventos ?? {}).filter((c) => c.valor === null && c.error === null).length,
+      conError: Object.entries(entrada.consenso?.eventos ?? {})
+        .filter(([, c]) => c.error !== null)
+        .map(([id, c]) => ({ id, intentos: c.intentos, error: c.error })),
+    },
   };
 }

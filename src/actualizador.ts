@@ -2,6 +2,7 @@
 
 import type { FilaCalendario } from './calendario.ts';
 import { redondear } from './calculos.ts';
+import { aplicarConsensos } from './consenso.ts';
 import { aplicarCorrecciones, FUENTE_MANUAL, type Correccion } from './correcciones.ts';
 import type { Almacen } from './almacen.ts';
 import { actualizarEstados, huella, sincronizar } from './datos.ts';
@@ -72,10 +73,11 @@ export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorri
   );
   if (tocan.length === 0) return resumen;
 
-  const guardados = await op.almacen.leerDatos();
+  const [guardados, consenso] = await Promise.all([op.almacen.leerDatos(), op.almacen.leerConsenso()]);
   const antes = huella(guardados);
   const datos = sincronizar(op.calendario, guardados, ahora);
   aplicarCorrecciones(datos.eventos, op.correcciones, ahora);
+  aplicarConsensos(datos.eventos, consenso);
 
   const porId = new Map(datos.eventos.map((e) => [e.id, e]));
   const aConsultar = tocan.map((f) => porId.get(f.id)).filter((e): e is EventoGuardado => e !== undefined && e.real === null);

@@ -21,14 +21,17 @@ export default async (req: Request) => {
 
   try {
     if (new URL(req.url).pathname === '/api/estado') {
-      const estado = await almacen.leerEstado();
-      return Response.json(construirEstado({ estado, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
+      const [estado, consenso] = await Promise.all([almacen.leerEstado(), almacen.leerConsenso()]);
+      return Response.json(construirEstado({ estado, consenso, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
     }
 
-    const datos = await almacen.leerDatos();
+    const [datos, consenso] = await Promise.all([
+      almacen.leerDatos(),
+      config.modoConsenso === 'ninguna' ? Promise.resolve(null) : almacen.leerConsenso(),
+    ]);
     // La página manda If-None-Match: si nada cambió, se responde 304 sin cuerpo y se ahorra ancho de banda.
     const etag = `W/"${createHash('sha1')
-      .update(JSON.stringify([datos?.actualizado ?? null, config.modoReal, config.modoConsenso, correcciones]))
+      .update(JSON.stringify([datos?.actualizado ?? null, config.modoReal, config.modoConsenso, correcciones, consenso?.eventos ?? null]))
       .update(JSON.stringify(cargarCalendario()))
       .digest('base64url')
       .slice(0, 20)}"`;
@@ -38,6 +41,7 @@ export default async (req: Request) => {
     const vista = construirVista({
       calendario: cargarCalendario(),
       datos,
+      consenso,
       correcciones,
       config,
       esConsultable: (fila) => tieneFuente(fila, config.modoReal),
