@@ -36,13 +36,14 @@
   --retrasado: #8f5300;
   --retrasado-fondo: #fdf0dc;
   --sombra-popover: 0 8px 28px rgb(19 32 42 / 0.16);
+  --borde-bandera: rgb(0 0 0 / 0.14);
   --radio: 8px;
   --letra: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --letra-titulo: "Newsreader", Georgia, "Times New Roman", serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --fondo: #0d1418;
     --superficie: #141d23;
     --superficie-2: #18232a;
@@ -65,8 +66,35 @@
     --retrasado: #f2b24c;
     --retrasado-fondo: #33250f;
     --sombra-popover: 0 8px 28px rgb(0 0 0 / 0.5);
+    --borde-bandera: rgb(255 255 255 / 0.22);
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --fondo: #0d1418;
+  --superficie: #141d23;
+  --superficie-2: #18232a;
+  --tinta: #e4ebf0;
+  --tinta-2: #a8b5c0;
+  --tinta-3: #8795a1;
+  --linea: #24313a;
+  --linea-fuerte: #364650;
+  --acento: #5cc3cf;
+  --acento-suave: #12343a;
+  --hoy: #13282f;
+  --favorable: #4cc38a;
+  --favorable-fondo: #12301f;
+  --desfavorable: #ff7b6f;
+  --desfavorable-fondo: #3a1715;
+  --neutral: #9db6da;
+  --neutral-fondo: #1a2636;
+  --en-linea: #a3afb9;
+  --en-linea-fondo: #222c33;
+  --retrasado: #f2b24c;
+  --retrasado-fondo: #33250f;
+  --sombra-popover: 0 8px 28px rgb(0 0 0 / 0.5);
+  --borde-bandera: rgb(255 255 255 / 0.22);
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -132,7 +160,7 @@ a { color: var(--acento); }
 /* Filtros */
 .filtros {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 5;
   background: color-mix(in srgb, var(--fondo) 92%, transparent);
   backdrop-filter: blur(6px);
@@ -250,8 +278,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   color: var(--acento);
 }
 .pais { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.bandera { width: 20px; height: 14px; flex: none; border-radius: 2px; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.14); display: block; }
-@media (prefers-color-scheme: dark) { .bandera { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.22); } }
+.bandera { width: 20px; height: 14px; flex: none; border-radius: 2px; box-shadow: 0 0 0 1px var(--borde-bandera); display: block; }
 .c-indicador .nombre { font-weight: 500; }
 .c-indicador .bandera { display: none; }
 .detalle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; font-size: 13px; color: var(--tinta-2); }
