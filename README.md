@@ -266,9 +266,9 @@ El 3 de octubre de 2026 se comparó cada serie con el último boletín publicado
 | Census | Balanza comercial de julio (−88.6 mmd); ventas minoristas de agosto da 1.1% porque Census revisó el 1.2% del boletín el 28 de septiembre | Coinciden |
 | FRED | Nómina de septiembre (+29 mil) y desempleo (4.2%) | Coinciden |
 | Fed | Comunicado del 16 de septiembre: límite superior 4.00% | Coincide |
-| BLS | Pendiente: la llave fue rechazada por la API | Mientras tanto, nómina, desempleo, CPI y JOLTS salen por FRED |
+| BLS | Nómina de septiembre (+29 mil), desempleo (4.2%), CPI general y subyacente de agosto (3.4% y 2.4%), PPI (5.4%), JOLTS (7.1 millones), ECI 2T (0.9%) | 8 de 8 coinciden |
 
-Además, con un calendario de prueba y la hora fijada al 2 de octubre a las 12:00, una corrida de `actualizar` obtuvo INPC de agosto (3.26% y 3.88%), IGAE de julio (3.4%), nómina (+29 mil, −67.4% contra lo esperado) y desempleo (4.2%, +2.4% y +0.10 pp) en 2.8 segundos; el INPC de septiembre quedó "Pendiente" sin tomar el dato de agosto, y ninguna llave apareció en `/api/datos` ni en `/api/estado`. Una corrida sin ventana activa termina en menos de 0.3 segundos.
+Además, con un calendario de prueba y la hora fijada al 2 de octubre a las 12:00, una corrida de `actualizar` obtuvo INPC de agosto (3.26% y 3.88%), IGAE de julio (3.4%), nómina (+29 mil, −67.4% contra lo esperado) y desempleo (4.2%, +2.4% y +0.10 pp) en 2.8 segundos; la nómina y el desempleo salieron por FRED porque en ese momento la llave de BLS aún no estaba activa, lo que comprobó el respaldo; el INPC de septiembre quedó "Pendiente" sin tomar el dato de agosto, y ninguna llave apareció en `/api/datos` ni en `/api/estado`. Una corrida sin ventana activa termina en menos de 0.3 segundos.
 
 ## Estimación de créditos de Netlify
 
