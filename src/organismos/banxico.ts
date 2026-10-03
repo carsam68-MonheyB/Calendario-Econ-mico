@@ -95,8 +95,9 @@ export function tasaDesdeTitulo(titulo: string, tasaVigente: number | null): num
 }
 
 export async function consultarAnuncios(): Promise<AnuncioBanxico[]> {
-  // La página está en ISO-8859-1.
-  const respuesta = await obtener(URL_ANUNCIOS, { headers: { Accept: 'text/html' } });
+  // La página está en ISO-8859-1. Con "Accept: text/html" a secas el servidor responde 406;
+  // con el Accept genérico de obtener() responde bien.
+  const respuesta = await obtener(URL_ANUNCIOS);
   const html = new TextDecoder('windows-1252').decode(await respuesta.arrayBuffer());
   return leerAnuncios(html);
 }
