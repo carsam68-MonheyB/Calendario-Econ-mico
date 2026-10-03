@@ -36,7 +36,7 @@ Los datos nunca se guardan en el repositorio. Que llegue un dato no genera commi
 | Sin dato al terminar el día: "Retrasado", todo el día siguiente | Cada hora |
 | Después, hasta 30 días | Cada 6 horas |
 
-Cuando un evento ya tiene su dato real, deja de consultarse. Una corrida sin ventana activa termina sin leer Blobs ni llamar a ninguna fuente. Las series del mismo organismo van en una sola llamada (BLS, INEGI y Banxico agrupan; BEA y Census, una llamada por tabla). Cada llamada tiene un límite de 8 segundos.
+Cuando un evento ya tiene su dato real, deja de consultarse. Una corrida sin ventana activa termina sin leer Blobs ni llamar a ninguna fuente. Las series del mismo organismo van en una sola llamada cuando el tamaño lo permite (BLS y Banxico agrupan; BEA y Census, una llamada por tabla; INEGI, una por serie porque cada serie completa pesa unos 100 KB). Todas las llamadas de una corrida van en paralelo y cada una tiene un límite de 8 segundos.
 
 El último tramo, cada 6 horas durante 30 días, no estaba en la especificación. Lo agregué para que un dato que tarda días, por ejemplo por un cierre del gobierno de EUA, llegue solo.
 
@@ -177,7 +177,8 @@ Las llaves nunca aparecen en el código, en Blobs, en `/api/datos`, en `/api/est
 **Anthropic** (solo con `FUENTE_CONSENSO=claude`)
 1. Abre https://platform.claude.com/settings/keys e inicia sesión.
 2. Crea una llave nueva, ponle un nombre como "calendario-economico" y cópiala.
-3. La cuenta necesita saldo para usar la API; se agrega en la sección de facturación de la misma consola.
+3. La cuenta necesita saldo para usar la API; se agrega en **Billing** → **Add credits**, sin recarga automática.
+4. Si le pusiste fecha de vencimiento a la llave, Anthropic te avisa por correo antes; ese día creas otra, la cambias en Netlify y haces un deploy.
 
 **Trading Economics** (de pago): la llave se obtiene en https://developer.tradingeconomics.com después de contratar un plan.
 
@@ -252,6 +253,22 @@ netlify functions:invoke actualizar
 En `netlify dev` hay dos variables solo para pruebas: `PRUEBA_AHORA` fija la hora de la corrida (ISO, UTC) y `CALENDARIO_CSV` usa otro calendario. Netlify no las toma en producción.
 
 Las funciones programadas no corren en los deploy previews; su lógica se prueba aquí. Las llaves se toman de las variables del entorno local.
+
+## Verificación realizada
+
+El 3 de octubre de 2026 se comparó cada serie con el último boletín publicado, con las llaves reales:
+
+| Fuente | Series comprobadas | Resultado |
+|---|---|---|
+| INEGI | INPC general y subyacente (mensual y 1a quincena), IGAE, actividad industrial, PIB oportuno, PIB, consumo privado, ventas minoristas, desempleo, balanza comercial, confianza del consumidor | 15 de 15 coinciden; 3 s en total |
+| Banxico | Remesas de agosto (5,452.3 mdd), tasa objetivo (6.50%), anuncio del 24 de septiembre | Coinciden |
+| BEA | PIB 2T (2.2%), PCE subyacente de agosto (3.0%), cuenta corriente 2T (−246.0 mmd) | Coinciden |
+| Census | Balanza comercial de julio (−88.6 mmd); ventas minoristas de agosto da 1.1% porque Census revisó el 1.2% del boletín el 28 de septiembre | Coinciden |
+| FRED | Nómina de septiembre (+29 mil) y desempleo (4.2%) | Coinciden |
+| Fed | Comunicado del 16 de septiembre: límite superior 4.00% | Coincide |
+| BLS | Pendiente: la llave fue rechazada por la API | Mientras tanto, nómina, desempleo, CPI y JOLTS salen por FRED |
+
+Además, con un calendario de prueba y la hora fijada al 2 de octubre a las 12:00, una corrida de `actualizar` obtuvo INPC de agosto (3.26% y 3.88%), IGAE de julio (3.4%), nómina (+29 mil, −67.4% contra lo esperado) y desempleo (4.2%, +2.4% y +0.10 pp) en 2.8 segundos; el INPC de septiembre quedó "Pendiente" sin tomar el dato de agosto, y ninguna llave apareció en `/api/datos` ni en `/api/estado`. Una corrida sin ventana activa termina en menos de 0.3 segundos.
 
 ## Estimación de créditos de Netlify
 
