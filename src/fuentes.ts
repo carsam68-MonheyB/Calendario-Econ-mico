@@ -44,6 +44,8 @@ export interface Mapeo {
   primaria: Receta[];
   /** FRED: solo si la fuente primaria no respondió. */
   respaldo?: Receta[];
+  /** Cómo obtener el último dato vigente antes del evento, si no es el periodo anterior de la serie primaria. */
+  anterior?: Receta[];
   /** Página pública para "Ver fuente". */
   url: string;
 }
@@ -123,6 +125,8 @@ export const MAPEO_OFICIAL: Record<string, Mapeo> = {
   },
   'us.fed': {
     primaria: [{ serie: { organismo: 'Fed' }, calculo: { tipo: 'valor' } }],
+    // La tasa vigente antes de la reunión: última observación de FRED anterior a la fecha.
+    anterior: [fred('DFEDTARU', 'dia')],
     url: 'https://www.federalreserve.gov/newsevents/pressreleases.htm',
   },
 
@@ -149,6 +153,7 @@ export const MAPEO_OFICIAL: Record<string, Mapeo> = {
   },
   'mx.banxico': {
     primaria: [{ serie: { organismo: 'Banxico', anuncio: true }, calculo: { tipo: 'valor' } }],
+    anterior: [{ serie: { organismo: 'Banxico', id: 'SF61745', frecuencia: 'dia' }, calculo: { tipo: 'valor' } }],
     url: 'https://www.banxico.org.mx/publicaciones-y-prensa/anuncios-de-las-decisiones-de-politica-monetaria/anuncios-politica-monetaria-t.html',
   },
 };
@@ -180,6 +185,19 @@ export function claveSerie(serie: Serie): string {
     case 'Banxico':
       return 'anuncio' in serie ? 'BANXICO:ANUNCIO' : serie.id;
   }
+}
+
+/**
+ * Último dato publicado antes del evento: el del periodo anterior de la serie. Para las decisiones de tasa
+ * (periodo diario), la última observación anterior a la fecha de la reunión.
+ */
+export function calcularAnterior(obs: Observaciones | undefined, calculo: Calculo, periodo: Periodo): number | null {
+  if (!obs) return null;
+  if (periodo.tipo === 'dia') {
+    const previa = [...obs.keys()].filter((k) => k < periodo.fecha).sort().at(-1);
+    return previa === undefined ? null : calcular(obs, calculo, { tipo: 'dia', fecha: previa });
+  }
+  return calcular(obs, calculo, periodoAnterior(periodo));
 }
 
 /**

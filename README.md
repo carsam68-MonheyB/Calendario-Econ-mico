@@ -15,12 +15,12 @@ La interfaz va en español y los números en formato es-MX. Las horas son del ce
 | `netlify/functions/datos.mts` | `GET /api/datos` y `GET /api/estado`, con `Cache-Control: no-store`. |
 | `src/fuentes.ts` | Mapeo indicador → fuente y serie, y el cálculo de cada dato. |
 | `src/calculos.ts` | Variación contra lo esperado, puntos porcentuales, puntos base y redondeo. |
-| `data/calendario.csv` | Las 91 filas del calendario. Viaja dentro de cada función y se carga en Blobs la primera vez. |
+| `data/calendario.csv` | Las 91 filas del calendario. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
 | `data/correcciones.json` | Correcciones manuales de respaldo. |
 
 Netlify Blobs guarda todo en el store `calendario`:
 
-- `datos`: el calendario con esperado, real, estado, fuente y hora de actualización.
+- `datos`: el calendario con anterior, esperado, real, estado, fuente y hora de actualización.
 - `estado`: por fuente, el último intento, la última respuesta correcta y el último error.
 - `consenso`: el esperado que se buscó y sus intentos.
 
@@ -40,9 +40,12 @@ Cuando un evento ya tiene su dato real, deja de consultarse. Una corrida sin ven
 
 El último tramo, cada 6 horas durante 30 días, no estaba en la especificación. Lo agregué para que un dato que tarda días, por ejemplo por un cierre del gobierno de EUA, llegue solo.
 
+Además, a las 5:00, 20:00, 21:00 y 22:00 del centro la corrida completa el dato **Anterior** de los eventos de los 10 días anteriores y siguientes que aún no lo tienen (ver [El dato anterior](#el-dato-anterior)).
+
 ### La página
 
 - Si hay un evento entre 2 minutos antes y 30 minutos después de su hora, vuelve a pedir datos cada 30 segundos; si no, cada 10 minutos. Se pausa con la pestaña oculta y actualiza al volver. Usa `If-None-Match`, así que una respuesta sin cambios no trae cuerpo.
+- Columnas por fila: **Anterior** (el último dato vigente del indicador, el del periodo previo), **Esperado**, **Real** y **Variación**. Al tocar un valor se ve su fuente y la hora en que se obtuvo.
 - Estados por fila: "Pendiente", "Esperando dato", "Publicado" y "Retrasado". ISM, IMEF y ADP muestran "Sin fuente automática" en modo oficial.
 - Un dato nuevo resalta su fila una sola vez y muestra "Nuevo" durante 10 minutos. Con permiso del navegador, avisa con una notificación como "EUA, CPI general anual sep: 3.1% vs 3.0% esperado (+3.3%)".
 - Arriba muestra "Actualizado hace X min". Si el servidor no responde, avisa y muestra la hora del último dato bueno.
@@ -95,6 +98,17 @@ Las decisiones de la Fed y de Banxico salen del comunicado oficial del día. FRE
 - **Redondeo:** igual que el boletín. CPI, PPI, PCE, PIB de EUA y tasas de desempleo, 1 decimal. INPC, 2 decimales. JOLTS, 1 decimal en millones. Tasas de interés, 2 decimales.
 - **Primera cifra:** se guarda la primera cifra publicada. Si una consulta posterior trae una cifra distinta (por ejemplo, la nómina de septiembre revisada en el informe de octubre), se guarda aparte y se muestra en texto pequeño. La variación siempre usa la primera cifra.
 - **Periodo:** un valor solo se acepta si su fecha de observación es el periodo del evento. Si la API todavía muestra el mes anterior, se sigue esperando.
+
+### El dato anterior
+
+La columna **Anterior** muestra el último dato vigente del indicador antes del evento. No requiere consultas extra: sale de la misma respuesta con la que se obtiene el dato real.
+
+- **Series mensuales y trimestrales:** el mismo cálculo del dato real, aplicado al periodo inmediato anterior (el mes o trimestre previo), con la cifra que la fuente tiene vigente al consultarla. Si la fuente ya revisó ese periodo, se muestra la revisada, como hacen los calendarios económicos.
+- **Decisiones de tasa:** la tasa vigente antes de la reunión. Para la Fed, el límite superior del rango según la serie `DFEDTARU` de FRED (última observación anterior al día de la reunión). Para Banxico, la tasa objetivo según la serie `SF61745` del SIE.
+- **PIB de EUA:** la segunda estimación tiene como anterior el avance, y la final, la segunda estimación. Se toman del propio calendario.
+- **Cuándo se llena:** hasta 10 días antes del evento, en las corridas de las 5:00, 20:00, 21:00 y 22:00 del centro. Al publicarse el dato real se vuelve a calcular con la misma respuesta (por si la fuente revisó el periodo previo) y después queda fijo. Un evento que ya se publicó sin anterior (por ejemplo, los que traen el real en el CSV) lo recibe en esas mismas corridas durante los 10 días siguientes.
+- **Sin fuente automática (ISM, IMEF, ADP):** se captura en la columna opcional `anterior` del CSV o con una corrección manual. Si no hay dato, la celda muestra "—".
+- **Modo tradingeconomics:** es el campo `Previous` del calendario de TE.
 
 ### Modo tradingeconomics
 
@@ -230,7 +244,7 @@ Los equipos creados desde el 28 de julio de 2026 crean proyectos privados: solo 
 Se usa casi nunca, porque cada cambio en `main` es un deploy (15 créditos).
 
 1. En GitHub abre `data/correcciones.json` en la rama `main` y toca el lápiz para editar.
-2. Agrega un objeto por evento, con `fecha`, `pais` e `indicador` tal como están en el CSV, y `real` y/o `esperado`. Un `null` borra el dato:
+2. Agrega un objeto por evento, con `fecha`, `pais` e `indicador` tal como están en el CSV, y `real`, `esperado` y/o `anterior`. Un `null` borra el dato:
    ```json
    [
      { "fecha": "2026-10-08", "pais": "MX", "indicador": "INPC general anual", "real": 3.76 }
@@ -269,6 +283,8 @@ El 3 de octubre de 2026 se comparó cada serie con el último boletín publicado
 | BLS | Nómina de septiembre (+29 mil), desempleo (4.2%), CPI general y subyacente de agosto (3.4% y 2.4%), PPI (5.4%), JOLTS (7.1 millones), ECI 2T (0.9%) | 8 de 8 coinciden |
 
 Además, con un calendario de prueba y la hora fijada al 2 de octubre a las 12:00, una corrida de `actualizar` obtuvo INPC de agosto (3.26% y 3.88%), IGAE de julio (3.4%), nómina (+29 mil, −67.4% contra lo esperado) y desempleo (4.2%, +2.4% y +0.10 pp) en 2.8 segundos; la nómina y el desempleo salieron por FRED porque en ese momento la llave de BLS aún no estaba activa, lo que comprobó el respaldo; el INPC de septiembre quedó "Pendiente" sin tomar el dato de agosto, y ninguna llave apareció en `/api/datos` ni en `/api/estado`. Una corrida sin ventana activa termina en menos de 0.3 segundos.
+
+**Dato anterior.** Corrida local del 3 de octubre a las 20:00 del centro: llenó el anterior de 8 eventos (BLS, INEGI y Census) en 6.8 s sin consultas adicionales. El de la nómina de septiembre (+133 mil, agosto revisado) coincide con el boletín del BLS del 2 de octubre, y el de la tasa de desempleo (4.1%) con el rango que ahí se cita.
 
 ## Estimación de créditos de Netlify
 

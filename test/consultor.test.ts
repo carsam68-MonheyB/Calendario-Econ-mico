@@ -24,6 +24,7 @@ const eventos = sincronizar(
 2026-11-25,07:30,US,PIB (2a estimación),3T,% t/t anualizado,pct,alto,,
 2026-11-05,13:00,MX,Decisión de Banxico (tasa objetivo),nov,%,tasa,neutral,,
 2026-10-08,06:00,MX,INPC general anual,sep,% a/a,pct,bajo,,
+2026-10-28,12:00,US,Decisión de la Fed (límite superior),oct,%,tasa,neutral,,
 `),
   null,
   new Date('2026-10-01T00:00:00Z'),
@@ -55,8 +56,11 @@ const blsSeptiembre = {
   status: 'REQUEST_SUCCEEDED',
   Results: {
     series: [
-      { seriesID: 'CES0000000001', data: [{ year: '2026', period: 'M09', value: '159044' }, { year: '2026', period: 'M08', value: '159015' }] },
-      { seriesID: 'LNS14000000', data: [{ year: '2026', period: 'M09', value: '4.2' }] },
+      {
+        seriesID: 'CES0000000001',
+        data: [{ year: '2026', period: 'M09', value: '159044' }, { year: '2026', period: 'M08', value: '159015' }, { year: '2026', period: 'M07', value: '158990' }],
+      },
+      { seriesID: 'LNS14000000', data: [{ year: '2026', period: 'M09', value: '4.2' }, { year: '2026', period: 'M08', value: '4.3' }] },
     ],
   },
 };
@@ -64,7 +68,7 @@ const blsSeptiembre = {
 test('nómina y desempleo de septiembre salen de BLS con el valor del boletín', async () => {
   rutas = (url) => (url.hostname === 'api.bls.gov' ? json(blsSeptiembre) : json({}, 404));
   const consultar = crearConsultorOficial(leerConfiguracion());
-  const r = await consultar({ aConsultar: [evento('2026-10-02-us-nomina'), evento('2026-10-02-us-tasa')], paraRevision: [] }, new Date());
+  const r = await consultar({ aConsultar: [evento('2026-10-02-us-nomina'), evento('2026-10-02-us-tasa')], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(
     r.valores.map((v) => [v.id, v.valor, v.fuente]),
     [
@@ -72,8 +76,62 @@ test('nómina y desempleo de septiembre salen de BLS con el valor del boletín',
       ['2026-10-02-us-tasa-de-desempleo', 4.2, 'BLS'],
     ],
   );
+  // El dato anterior sale de la misma respuesta: el cambio de agosto y la tasa de agosto.
+  assert.deepEqual(
+    r.anteriores.map((v) => [v.id, v.valor, v.fuente]),
+    [
+      ['2026-10-02-us-nomina-no-agricola', 25, 'BLS'],
+      ['2026-10-02-us-tasa-de-desempleo', 4.3, 'BLS'],
+    ],
+  );
   assert.deepEqual(r.intentos, { BLS: { ok: true } });
   assert.equal(llamadas.length, 1, 'una sola llamada a BLS para las dos series');
+});
+
+test('solo el dato anterior: se calcula el periodo previo sin pedir el real', async () => {
+  const hastaAgosto = {
+    status: 'REQUEST_SUCCEEDED',
+    Results: { series: [{ seriesID: 'CUUR0000SA0', data: [{ year: '2026', period: 'M08', value: '334.980' }, { year: '2025', period: 'M08', value: '323.976' }] }] },
+  };
+  rutas = () => json(hastaAgosto);
+  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [], paraRevision: [], paraAnterior: [evento('2026-10-14-us-cpi')] }, new Date());
+  assert.deepEqual(r.valores, []);
+  assert.equal(r.anteriores.length, 1);
+  assert.equal(r.anteriores[0]?.valor.toFixed(1), '3.4');
+  assert.equal(r.anteriores[0]?.fuente, 'BLS');
+  assert.equal(llamadas.length, 1);
+});
+
+test('el anterior de una decisión de Banxico es la tasa vigente, tomada del SIE sin leer los anuncios', async () => {
+  rutas = (url) => {
+    if (url.pathname.includes('/SieAPIRest/')) {
+      return json({ bmx: { series: [{ idSerie: 'SF61745', datos: [{ fecha: '03/11/2026', dato: '6.5000' }, { fecha: '04/11/2026', dato: '6.5000' }] }] } });
+    }
+    return json({}, 404);
+  };
+  const r = await crearConsultorOficial(leerConfiguracion())(
+    { aConsultar: [], paraRevision: [], paraAnterior: [evento('2026-11-05-mx-decision')] },
+    new Date(),
+  );
+  assert.deepEqual(r.valores, []);
+  assert.deepEqual(r.anteriores.map((v) => [v.valor, v.fuente]), [[6.5, 'Banxico']]);
+  assert.ok(llamadas.every((u) => !u.includes('anuncios')), 'no hace falta la página de anuncios');
+});
+
+test('el anterior de una decisión de la Fed es el límite superior vigente, tomado de FRED', async () => {
+  rutas = (url) => {
+    if (url.hostname === 'api.stlouisfed.org' && url.searchParams.get('series_id') === 'DFEDTARU') {
+      return json({ observations: [{ date: '2026-10-26', value: '4.25' }, { date: '2026-10-27', value: '4.25' }, { date: '2026-10-28', value: '4.00' }] });
+    }
+    return json({}, 404);
+  };
+  const r = await crearConsultorOficial(leerConfiguracion())(
+    { aConsultar: [], paraRevision: [], paraAnterior: [evento('2026-10-28-us-decision')] },
+    new Date(),
+  );
+  assert.deepEqual(r.valores, []);
+  assert.deepEqual(r.anteriores.map((v) => [v.valor, v.fuente]), [[4.25, 'FRED']], 'la última observación anterior al día de la reunión');
+  assert.ok(llamadas.every((u) => !u.includes('federalreserve.gov')));
 });
 
 test('un mes que aún no se publica no toma el dato del mes anterior', async () => {
@@ -82,7 +140,7 @@ test('un mes que aún no se publica no toma el dato del mes anterior', async () 
     Results: { series: [{ seriesID: 'CUUR0000SA0', data: [{ year: '2026', period: 'M08', value: '334.980' }, { year: '2025', period: 'M08', value: '323.976' }] }] },
   };
   rutas = () => json(soloAgosto);
-  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-14-us-cpi')], paraRevision: [] }, new Date());
+  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-14-us-cpi')], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(r.valores, []);
   assert.deepEqual(r.intentos, { BLS: { ok: true } });
 });
@@ -96,7 +154,7 @@ test('si BLS falla, se usa FRED como respaldo', async () => {
     }
     return json({}, 404);
   };
-  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-02-us-nomina')], paraRevision: [] }, new Date());
+  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-02-us-nomina')], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(r.valores.map((v) => [v.valor, v.fuente, v.url]), [[29, 'FRED (respaldo)', 'https://fred.stlouisfed.org/series/PAYEMS']]);
   assert.deepEqual(r.intentos.BLS, { ok: false, error: 'HTTP 503' });
   assert.deepEqual(r.intentos.FRED, { ok: true });
@@ -105,7 +163,7 @@ test('si BLS falla, se usa FRED como respaldo', async () => {
 test('sin llave no se llama a la fuente y se avisa qué variable falta', async () => {
   delete process.env.INEGI_TOKEN;
   rutas = () => json({}, 500);
-  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-08-mx-inpc')], paraRevision: [] }, new Date());
+  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-10-08-mx-inpc')], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(r.intentos.INEGI, { ok: false, error: 'Falta la variable INEGI_TOKEN' });
   assert.equal(llamadas.length, 0);
 });
@@ -121,10 +179,10 @@ test('PIB segunda estimación: solo vale si BEA ya revisó la tabla ese día', a
   });
   const pib = evento('2026-11-25-us-pib');
   rutas = () => json(bea('October 29, 2026'));
-  let r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [pib], paraRevision: [] }, new Date());
+  let r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [pib], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(r.valores, [], 'todavía es la cifra del avance');
   rutas = () => json(bea('November 25, 2026'));
-  r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [pib], paraRevision: [] }, new Date());
+  r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [pib], paraRevision: [], paraAnterior: [] }, new Date());
   assert.deepEqual(r.valores.map((v) => [v.valor, v.fuente]), [[2.8, 'BEA']]);
 });
 
@@ -140,7 +198,7 @@ test('decisión de Banxico: un recorte se aplica a la tasa vigente ese día', as
     }
     return json({}, 404);
   };
-  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-11-05-mx-decision')], paraRevision: [] }, new Date());
+  const r = await crearConsultorOficial(leerConfiguracion())({ aConsultar: [evento('2026-11-05-mx-decision')], paraRevision: [], paraAnterior: [] }, new Date());
   assert.equal(r.valores[0]?.valor, 6.25);
   assert.equal(r.valores[0]?.fuente, 'Banxico');
   assert.match(r.valores[0]?.url ?? '', /\.pdf$/);
@@ -151,7 +209,7 @@ test('los errores nunca llevan llaves', async () => {
     throw new Error(`conexión rechazada en ${url.toString()}`);
   };
   const r = await crearConsultorOficial(leerConfiguracion())(
-    { aConsultar: [evento('2026-10-02-us-nomina'), evento('2026-10-08-mx-inpc'), evento('2026-11-25-us-pib')], paraRevision: [] },
+    { aConsultar: [evento('2026-10-02-us-nomina'), evento('2026-10-08-mx-inpc'), evento('2026-11-25-us-pib')], paraRevision: [], paraAnterior: [] },
     new Date(),
   );
   const texto = JSON.stringify(r);

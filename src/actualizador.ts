@@ -7,15 +7,21 @@ import { aplicarCorrecciones, FUENTE_MANUAL, type Correccion } from './correccio
 import type { Almacen } from './almacen.ts';
 import { actualizarEstados, huella, sincronizar } from './datos.ts';
 import { indicadorDe } from './indicadores.ts';
-import type { EstadoServicio, EventoGuardado } from './modelo.ts';
-import { tocaConsultar } from './programacion.ts';
+import type { EstadoServicio, EventoGuardado, ValorConFuente } from './modelo.ts';
+import { tocaConsultar, tocaRevisarAnteriores } from './programacion.ts';
 import { sanitizar } from './red.ts';
+import { fechaCdmx, sumarDias } from './tiempo.ts';
+
+/** Días hacia adelante y hacia atrás en que se completa el dato anterior de los eventos que no lo tienen. */
+export const DIAS_DE_ANTERIOR = 10;
 
 export interface PeticionConsulta {
   /** Eventos sin dato real a los que les toca consulta en esta corrida. */
   aConsultar: EventoGuardado[];
   /** Eventos ya publicados de los mismos indicadores, para detectar revisiones sin llamadas extra. */
   paraRevision: EventoGuardado[];
+  /** Eventos cercanos (pendientes o ya publicados) a los que les falta el dato anterior. */
+  paraAnterior: EventoGuardado[];
 }
 
 export interface ValorObtenido {
@@ -27,6 +33,8 @@ export interface ValorObtenido {
 
 export interface ResultadoConsulta {
   valores: ValorObtenido[];
+  /** Último dato publicado antes de cada evento (aConsultar y paraAnterior). */
+  anteriores: ValorObtenido[];
   /** Resultado por fuente consultada ("BLS", "INEGI", …). El error ya viene sin llaves. */
   intentos: Record<string, { ok: boolean; error?: string }>;
 }
@@ -43,16 +51,37 @@ export interface OpcionesCorrida {
 }
 
 export interface ResumenCorrida {
-  motivo: 'sin ventana activa' | 'ya publicados' | 'consulta';
+  motivo: 'sin ventana activa' | 'ya publicados' | 'consulta' | 'anteriores';
   consultados: string[];
   nuevos: string[];
   revisados: string[];
+  anteriores: string[];
   escribioDatos: boolean;
   escribioEstado: boolean;
 }
 
 function mismoValor(a: number, b: number, decimales: number): boolean {
   return redondear(a, decimales) === redondear(b, decimales);
+}
+
+/**
+ * El dato anterior de una estimación posterior del mismo periodo es la estimación previa ya publicada
+ * (PIB avance → segunda estimación → final). Se toma del propio calendario, sin consultar nada.
+ */
+export function anteriorDesdeCalendario(evento: EventoGuardado, eventos: EventoGuardado[]): ValorConFuente | null {
+  const clave = indicadorDe(evento).clave;
+  const previos = eventos
+    .filter(
+      (e) =>
+        e.id !== evento.id &&
+        e.pais === evento.pais &&
+        e.periodo === evento.periodo &&
+        e.fecha < evento.fecha &&
+        e.real !== null &&
+        indicadorDe(e).clave === clave,
+    )
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  return previos[0]?.real ?? null;
 }
 
 export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorrida> {
@@ -62,6 +91,7 @@ export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorri
     consultados: [],
     nuevos: [],
     revisados: [],
+    anteriores: [],
     escribioDatos: false,
     escribioEstado: false,
   };
@@ -71,7 +101,8 @@ export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorri
   const tocan = op.calendario.filter(
     (f) => f.tipo !== 'evento' && f.real === null && op.esConsultable(f) && tocaConsultar(f, ahora),
   );
-  if (tocan.length === 0) return resumen;
+  const revisarAnteriores = tocaRevisarAnteriores(ahora);
+  if (tocan.length === 0 && !revisarAnteriores) return resumen;
 
   const [guardados, consenso] = await Promise.all([op.almacen.leerDatos(), op.almacen.leerConsenso()]);
   const antes = huella(guardados);
@@ -82,15 +113,58 @@ export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorri
   const porId = new Map(datos.eventos.map((e) => [e.id, e]));
   const aConsultar = tocan.map((f) => porId.get(f.id)).filter((e): e is EventoGuardado => e !== undefined && e.real === null);
 
-  if (aConsultar.length > 0) {
-    resumen.motivo = 'consulta';
+  // Dato anterior: eventos de los días cercanos que todavía no lo tienen (los pendientes y los que
+  // ya se publicaron sin que la fuente pudiera darlo, por ejemplo los que traen el real en el CSV).
+  const hoy = fechaCdmx(ahora);
+  const desde = sumarDias(hoy, -DIAS_DE_ANTERIOR);
+  const hasta = sumarDias(hoy, DIAS_DE_ANTERIOR);
+  const paraAnterior = revisarAnteriores
+    ? datos.eventos.filter(
+        (e) =>
+          e.tipo !== 'evento' &&
+          e.anterior === null &&
+          e.fecha >= desde &&
+          e.fecha <= hasta &&
+          op.esConsultable(e) &&
+          !aConsultar.some((a) => a.id === e.id),
+      )
+    : [];
+
+  const marcaAnterior = (e: EventoGuardado, valor: ValorConFuente) => {
+    e.anterior = valor;
+    e.actualizado = ahora.toISOString();
+    resumen.anteriores.push(e.id);
+  };
+  // Lo que se resuelve sin llamadas: la estimación previa del mismo periodo.
+  for (const e of [...aConsultar, ...paraAnterior]) {
+    if (e.anterior !== null) continue;
+    const previo = anteriorDesdeCalendario(e, datos.eventos);
+    if (previo) marcaAnterior(e, { ...previo });
+  }
+  const paraAnteriorRestantes = paraAnterior.filter((e) => e.anterior === null);
+
+  if (aConsultar.length > 0 || paraAnteriorRestantes.length > 0) {
+    resumen.motivo = aConsultar.length > 0 ? 'consulta' : 'anteriores';
     resumen.consultados = aConsultar.map((e) => e.id);
     const claves = new Set(aConsultar.map((e) => indicadorDe(e).clave));
     const paraRevision = datos.eventos.filter(
       (e) => e.real !== null && e.real.fuente !== FUENTE_MANUAL && claves.has(indicadorDe(e).clave),
     );
     const pedidos = new Set(resumen.consultados);
-    const resultado = await op.consultar({ aConsultar, paraRevision }, ahora);
+    const pedidosAnterior = new Set([...aConsultar, ...paraAnteriorRestantes].map((e) => e.id));
+    const resultado = await op.consultar({ aConsultar, paraRevision, paraAnterior: paraAnteriorRestantes }, ahora);
+
+    // Primero los anteriores: se actualizan mientras el evento sigue pendiente (la fuente puede revisar el
+    // periodo previo) y quedan fijos al publicarse. Uno que faltaba se completa aunque el real ya esté.
+    for (const a of resultado.anteriores) {
+      const e = porId.get(a.id);
+      if (!e || !pedidosAnterior.has(e.id) || !Number.isFinite(a.valor)) continue;
+      if (e.anterior && (e.real !== null || e.anterior.fuente === FUENTE_MANUAL)) continue;
+      if (anteriorDesdeCalendario(e, datos.eventos)) continue;
+      const decimales = indicadorDe(e).decimales;
+      if (e.anterior && mismoValor(e.anterior.valor, a.valor, decimales)) continue;
+      marcaAnterior(e, { valor: redondear(a.valor, decimales), fuente: a.fuente, url: a.url, obtenido: ahora.toISOString() });
+    }
 
     for (const v of resultado.valores) {
       const e = porId.get(v.id);
@@ -123,8 +197,10 @@ export async function ejecutarCorrida(op: OpcionesCorrida): Promise<ResumenCorri
     }
     await op.almacen.guardarEstado(estado);
     resumen.escribioEstado = true;
-  } else {
+  } else if (tocan.length > 0) {
     resumen.motivo = 'ya publicados';
+  } else if (resumen.anteriores.length > 0) {
+    resumen.motivo = 'anteriores';
   }
 
   actualizarEstados(datos, op.esConsultable, ahora);

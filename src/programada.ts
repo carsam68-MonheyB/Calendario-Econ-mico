@@ -107,7 +107,7 @@ export async function correrProgramada(nombre: string, crearConsultor: (config: 
   if (resumen.motivo !== 'sin ventana activa' || consensos > 0) {
     console.log(
       `[${nombre}] ${resumen.motivo}: consultados=${resumen.consultados.length} nuevos=${resumen.nuevos.join(',') || '-'} ` +
-        `revisados=${resumen.revisados.join(',') || '-'} escribio=${resumen.escribioDatos} consensos=${consensos} ${Date.now() - inicio} ms`,
+        `revisados=${resumen.revisados.join(',') || '-'} anteriores=${resumen.anteriores.length} escribio=${resumen.escribioDatos} consensos=${consensos} ${Date.now() - inicio} ms`,
     );
   }
   return resumen;

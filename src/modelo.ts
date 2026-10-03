@@ -14,8 +14,10 @@ export interface ValorConFuente {
 }
 
 /** Llave "datos": el calendario con esperado, real, estado, fuente y hora de actualización. */
-export interface EventoGuardado extends Omit<FilaCalendario, 'esperado' | 'real'> {
+export interface EventoGuardado extends Omit<FilaCalendario, 'esperado' | 'real' | 'anterior'> {
   esperado: ValorConFuente | null;
+  /** Último dato publicado antes del evento: el del periodo anterior o la tasa vigente. */
+  anterior: ValorConFuente | null;
   /** Primera cifra publicada. No se sobrescribe con revisiones. */
   real: ValorConFuente | null;
   /** Cifra revisada más reciente, si difiere de la primera. */

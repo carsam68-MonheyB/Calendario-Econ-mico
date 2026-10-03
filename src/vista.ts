@@ -28,6 +28,8 @@ export interface EventoVista {
   mejor: Mejor;
   decimales: number;
   altoImpacto: boolean;
+  anterior: number | null;
+  anteriorFuente: FuenteVista | null;
   esperado: number | null;
   esperadoFuente: FuenteVista | null;
   real: number | null;
@@ -99,6 +101,8 @@ export function construirVista(entrada: {
       mejor: e.mejor,
       decimales: meta.decimales,
       altoImpacto: meta.altoImpacto,
+      anterior: e.anterior?.valor ?? null,
+      anteriorFuente: fuente(e.anterior),
       esperado,
       esperadoFuente: fuente(e.esperado),
       real,

@@ -20,6 +20,7 @@ export interface EventoTe {
   Event?: string;
   Reference?: string;
   Actual?: string;
+  Previous?: string;
   Forecast?: string;
   Unit?: string;
   URL?: string;

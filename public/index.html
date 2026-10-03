@@ -260,6 +260,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 .tabla td.num { text-align: right; white-space: nowrap; }
 .col-fecha { width: 108px; }
 .col-pais { width: 104px; }
+.col-anterior { width: 118px; }
 .col-esperado { width: 128px; }
 .col-real { width: 140px; }
 .col-var { width: 150px; }
@@ -395,8 +396,8 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   .tabla td { border-bottom: 0; padding: 0; }
   .tabla .fila {
     display: grid;
-    grid-template-columns: 1fr 1fr 1.15fr;
-    grid-template-areas: "fecha fecha fecha" "ind ind ind" "esp real var";
+    grid-template-columns: 1fr 1fr 1fr 1.15fr;
+    grid-template-areas: "fecha fecha fecha fecha" "ind ind ind ind" "ant esp real var";
     gap: 2px 10px;
     padding: 11px 14px 12px;
     border-bottom: 1px solid var(--linea);
@@ -415,10 +416,11 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   .c-indicador .encabezado { display: flex; align-items: center; gap: 8px; }
   .c-indicador .bandera { display: block; }
   .c-indicador .detalle { margin-top: 0; }
+  .tabla td.c-anterior { grid-area: ant; text-align: left; }
   .tabla td.c-esperado { grid-area: esp; text-align: left; }
   .tabla td.c-real { grid-area: real; text-align: left; }
   .tabla td.c-var { grid-area: var; text-align: right; }
-  .tabla .c-esperado::before, .tabla .c-real::before, .tabla .c-var::before {
+  .tabla .c-anterior::before, .tabla .c-esperado::before, .tabla .c-real::before, .tabla .c-var::before {
     content: attr(data-etiqueta);
     display: block;
     font-size: 11.5px;
@@ -614,6 +616,10 @@ function htmlValor(e, valor) {
 function botonInfo(e, campo, etiqueta) {
   return `<button class="info" type="button" data-info="${campo}" data-id="${escapar(e.id)}" aria-label="${etiqueta}" popovertarget="popover">${ICONO_INFO}</button>`;
 }
+function htmlAnterior(e) {
+  if (e.tipo === 'evento' || e.anterior === null) return '<span class="sin-valor">—</span>';
+  return htmlValor(e, e.anterior) + botonInfo(e, 'anterior', 'Fuente del dato anterior');
+}
 function htmlEsperado(e) {
   if (e.tipo === 'evento' || e.esperado === null) return '<span class="sin-valor">—</span>';
   return htmlValor(e, e.esperado) + botonInfo(e, 'esperado', 'Fuente del esperado');
@@ -699,14 +705,14 @@ function render({ desplazar = false } = {}) {
       .filter((s) => s.desde <= domingo && s.hasta >= lunes)
       .map((s) => `<p class="nota-semana">${escapar(s.texto)}</p>`).join('');
     html += `<section class="semana" aria-labelledby="${idSemana}"><div class="semana__cabecera"><h2 id="${idSemana}">${etiquetaSemana(lunes)}</h2>${notas}</div>`;
-    html += '<table class="tabla"><colgroup><col class="col-fecha"><col class="col-pais"><col><col class="col-esperado"><col class="col-real"><col class="col-var"></colgroup>';
-    html += '<thead><tr><th scope="col">Fecha y hora</th><th scope="col">País</th><th scope="col">Indicador</th><th scope="col" class="num">Esperado</th><th scope="col" class="num">Real</th><th scope="col" class="num">Variación %</th></tr></thead><tbody>';
+    html += '<table class="tabla"><colgroup><col class="col-fecha"><col class="col-pais"><col><col class="col-anterior"><col class="col-esperado"><col class="col-real"><col class="col-var"></colgroup>';
+    html += '<thead><tr><th scope="col">Fecha y hora</th><th scope="col">País</th><th scope="col">Indicador</th><th scope="col" class="num">Anterior</th><th scope="col" class="num">Esperado</th><th scope="col" class="num">Real</th><th scope="col" class="num">Variación %</th></tr></thead><tbody>';
     const dias = semanas.get(lunes);
     for (const fecha of [...dias.keys()].sort()) {
       const feriados = new Map();
       for (const h of feriadosVisibles(fecha)) feriados.set(h.nombre, [...(feriados.get(h.nombre) ?? []), PAISES[h.pais]]);
       for (const [nombre, paises] of feriados) {
-        html += `<tr class="nota-dia"><td colspan="6"><span class="fecha">${fechaCorta(fecha)}</span>Feriado en ${paises.join(' y ')}: ${escapar(nombre)}</td></tr>`;
+        html += `<tr class="nota-dia"><td colspan="7"><span class="fecha">${fechaCorta(fecha)}</span>Feriado en ${paises.join(' y ')}: ${escapar(nombre)}</td></tr>`;
       }
       dias.get(fecha).forEach(({ e, est }, i) => {
         const clases = ['fila'];
@@ -720,6 +726,7 @@ function render({ desplazar = false } = {}) {
         html += `<td class="c-fecha${i > 0 ? ' fecha--repetida' : ''}"><span class="fecha">${fechaCorta(e.fecha)}${e.fecha === hoy ? '<span class="etiqueta-hoy">hoy</span>' : ''}</span><span class="hora">${horaCorta(e.hora)}</span>${nuevo ? '<span class="chip chip--nuevo solo-movil">Nuevo</span>' : ''}</td>`;
         html += `<td class="c-pais"><span class="pais">${BANDERAS[e.pais]}${PAISES[e.pais]}</span></td>`;
         html += `<td class="c-indicador"><div class="encabezado">${BANDERAS[e.pais]}<span class="nombre">${escapar(e.indicador)}</span><span class="sr-only">, ${PAISES[e.pais]}</span></div><div class="detalle">${periodo}${chips.join('')}</div></td>`;
+        html += `<td class="c-anterior num" data-etiqueta="Anterior">${htmlAnterior(e)}</td>`;
         html += `<td class="c-esperado num" data-etiqueta="Esperado">${htmlEsperado(e)}</td>`;
         html += `<td class="c-real num" data-etiqueta="Real">${htmlReal(e, est, ahora)}</td>`;
         html += `<td class="c-var num" data-etiqueta="Variación">${htmlVariacion(e)}</td>`;
@@ -879,7 +886,7 @@ function pintarPie() {
   const v = estado.vista;
   const real = v.modoReal === 'tradingeconomics' ? 'Trading Economics' : 'fuentes oficiales (BLS, BEA, Census, Fed, INEGI y Banxico)';
   const esperado = { tradingeconomics: 'consenso de Trading Economics', claude: 'consenso del mercado buscado por Claude', ninguna: 'sin fuente; la variación queda vacía' }[v.modoConsenso];
-  $('#pie').innerHTML = `<p>Dato real: ${real}. Esperado: ${esperado}.</p><p>Variación % = (real − esperado) / |esperado|. Verde es favorable, rojo desfavorable y azul grisáceo sin juicio. Las flechas indican si el real quedó arriba o abajo de lo esperado.</p><p>Horas del centro de México (UTC−6). <a href="/api/estado">Estado de las fuentes</a></p>`;
+  $('#pie').innerHTML = `<p>Dato real: ${real}. Esperado: ${esperado}.</p><p>Anterior es el último dato publicado antes del evento: el periodo previo o, en las decisiones de tasa, la tasa vigente. Variación % = (real − esperado) / |esperado|. Verde es favorable, rojo desfavorable y azul grisáceo sin juicio. Las flechas indican si el real quedó arriba o abajo de lo esperado.</p><p>Horas del centro de México (UTC−6). <a href="/api/estado">Estado de las fuentes</a></p>`;
 }
 
 /* Popover de fuente */
@@ -889,10 +896,11 @@ document.addEventListener('click', (ev) => {
   const e = estado.vista?.eventos.find((x) => x.id === boton.dataset.id);
   if (!e) return;
   const campo = boton.dataset.info;
-  const fuente = campo === 'esperado' ? e.esperadoFuente : e.realFuente;
-  const valor = campo === 'esperado' ? e.esperado : e.real;
+  const fuente = { anterior: e.anteriorFuente, esperado: e.esperadoFuente, real: e.realFuente }[campo];
+  const valor = { anterior: e.anterior, esperado: e.esperado, real: e.real }[campo];
+  const titulo = { anterior: 'Dato anterior', esperado: 'Esperado', real: 'Dato real' }[campo];
   const popover = $('#popover');
-  let html = `<p class="popover__titulo">${campo === 'esperado' ? 'Esperado' : 'Dato real'}: ${escapar(textoValor(e, valor))}</p>`;
+  let html = `<p class="popover__titulo">${titulo}: ${escapar(textoValor(e, valor))}</p>`;
   if (fuente) {
     html += `<p>Fuente: ${escapar(NOMBRES_FUENTE[fuente.nombre] ?? fuente.nombre)}</p>`;
     html += `<p class="tenue">Obtenido: ${escapar(fechaHora.format(new Date(fuente.obtenido)))}</p>`;

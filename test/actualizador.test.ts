@@ -4,6 +4,7 @@ import { ejecutarCorrida, type Consultor, type PeticionConsulta } from '../src/a
 import { almacenMemoria } from '../src/almacen.ts';
 import { leerCalendario } from '../src/calendario.ts';
 import { leerCorrecciones } from '../src/correcciones.ts';
+import type { EventoGuardado } from '../src/modelo.ts';
 
 const calendario = leerCalendario(`fecha,hora,pais,indicador,periodo,unidad,tipo,mejor,esperado,real
 2026-10-02,06:30,US,Nómina no agrícola,sep,miles,nivel,alto,89,29
@@ -16,18 +17,31 @@ const calendario = leerCalendario(`fecha,hora,pais,indicador,periodo,unidad,tipo
 const sinIsm = (f: { indicador: string }) => !f.indicador.startsWith('ISM');
 const utc = (iso: string) => new Date(iso);
 
-function consultorFijo(valores: Record<string, number>, intentos: Record<string, { ok: boolean; error?: string }> = { BLS: { ok: true } }) {
+function consultorFijo(
+  valores: Record<string, number>,
+  intentos: Record<string, { ok: boolean; error?: string }> = { BLS: { ok: true } },
+  anteriores: Record<string, number> = {},
+) {
   const peticiones: PeticionConsulta[] = [];
   const consultar: Consultor = async (peticion) => {
     peticiones.push(peticion);
     const ids = [...peticion.aConsultar, ...peticion.paraRevision].map((e) => e.id);
+    const conAnterior = [...peticion.aConsultar, ...peticion.paraAnterior].map((e) => e.id);
     return {
       valores: ids.filter((id) => id in valores).map((id) => ({ id, valor: valores[id]!, fuente: 'BLS', url: 'https://www.bls.gov/' })),
+      anteriores: conAnterior.filter((id) => id in anteriores).map((id) => ({ id, valor: anteriores[id]!, fuente: 'BLS', url: 'https://www.bls.gov/' })),
       intentos,
     };
   };
   return { consultar, peticiones };
 }
+
+const calendarioPib = leerCalendario(`fecha,hora,pais,indicador,periodo,unidad,tipo,mejor,esperado,real
+2026-10-29,06:30,US,PIB (avance),3T,% t/t anualizado,pct,alto,,2.8
+2026-11-06,07:30,US,Nómina no agrícola,oct,miles,nivel,alto,,
+2026-11-25,07:30,US,PIB (2a estimación),3T,% t/t anualizado,pct,alto,,
+`);
+const evento = (datos: { eventos: { id: string }[] } | null, inicio: string) => datos?.eventos.find((e) => e.id.startsWith(inicio)) as EventoGuardado | undefined;
 
 const base = { calendario, correcciones: [], esConsultable: sinIsm };
 
@@ -120,4 +134,71 @@ test('correcciones mal escritas no se aplican y se informa el motivo', () => {
   assert.match(leerCorrecciones('[{"fecha":"2026-10-02","pais":"US"}]').error ?? '', /faltan/);
   assert.match(leerCorrecciones('[{"fecha":"2026-10-02","pais":"US","indicador":"X","real":"4.2"}]').error ?? '', /número/);
   assert.equal(leerCorrecciones('[]').error, null);
+});
+
+test('a las 20:00 completa el dato anterior de los eventos cercanos y lo deja fijo al publicarse', async () => {
+  const memoria = almacenMemoria();
+  const primero = consultorFijo({}, { BLS: { ok: true } }, { '2026-11-06-us-nomina-no-agricola': 22, '2026-10-29-us-pib-avance': 3.8 });
+  // Sábado 31 de octubre, 20:00 del centro: nada toca consultar, pero sí revisar anteriores.
+  let r = await ejecutarCorrida({ ...base, calendario: calendarioPib, almacen: memoria.almacen, consultar: primero.consultar, ahora: utc('2026-11-01T02:00:00Z') });
+  assert.equal(r.motivo, 'anteriores');
+  assert.deepEqual(r.consultados, []);
+  assert.deepEqual(primero.peticiones[0]?.aConsultar, []);
+  // El avance del PIB ya se publicó (viene en el CSV) pero no tiene anterior; la nómina de octubre está a 6 días.
+  assert.deepEqual(primero.peticiones[0]?.paraAnterior.map((e) => e.id), ['2026-10-29-us-pib-avance', '2026-11-06-us-nomina-no-agricola']);
+  assert.deepEqual(r.anteriores, ['2026-10-29-us-pib-avance', '2026-11-06-us-nomina-no-agricola']);
+  assert.equal(r.escribioDatos, true);
+  let nomina = evento(memoria.actual().datos, '2026-11-06-us-nomina');
+  assert.equal(nomina?.anterior?.valor, 22);
+  assert.equal(nomina?.anterior?.fuente, 'BLS');
+  assert.equal(nomina?.real, null);
+  assert.equal(memoria.actual().estado?.fuentes.BLS?.ultimoExito, '2026-11-01T02:00:00.000Z');
+
+  // Al publicarse la nómina, la fuente ya revisó septiembre: el anterior se actualiza junto con el real.
+  const segundo = consultorFijo({ '2026-11-06-us-nomina-no-agricola': 120 }, { BLS: { ok: true } }, { '2026-11-06-us-nomina-no-agricola': 41, '2026-10-29-us-pib-avance': 9.9 });
+  r = await ejecutarCorrida({ ...base, calendario: calendarioPib, almacen: memoria.almacen, consultar: segundo.consultar, ahora: utc('2026-11-06T13:30:00Z') });
+  assert.deepEqual(r.nuevos, ['2026-11-06-us-nomina-no-agricola']);
+  nomina = evento(memoria.actual().datos, '2026-11-06-us-nomina');
+  assert.equal(nomina?.real?.valor, 120);
+  assert.equal(nomina?.anterior?.valor, 41);
+  // Un anterior que no se pidió no se toca; el ya publicado queda fijo.
+  assert.equal(evento(memoria.actual().datos, '2026-10-29-us-pib')?.anterior?.valor, 3.8);
+
+  // Ya publicada, la nómina no se vuelve a consultar ni cambia su anterior.
+  const tercero = consultorFijo({}, { BLS: { ok: true } }, { '2026-11-06-us-nomina-no-agricola': 55 });
+  r = await ejecutarCorrida({ ...base, calendario: calendarioPib, almacen: memoria.almacen, consultar: tercero.consultar, ahora: utc('2026-11-07T02:00:00Z') });
+  assert.equal(tercero.peticiones.length, 0);
+  assert.equal(evento(memoria.actual().datos, '2026-11-06-us-nomina')?.anterior?.valor, 41);
+});
+
+test('la estimación previa del PIB es el anterior de la siguiente, sin consultar nada', async () => {
+  const memoria = almacenMemoria();
+  const { consultar, peticiones } = consultorFijo({}, { BLS: { ok: true } }, { '2026-11-25-us-pib-2a-estimacion': 2.9 });
+  // 15 de noviembre, 20:00 del centro: la segunda estimación está a 10 días.
+  let r = await ejecutarCorrida({ ...base, calendario: calendarioPib, almacen: memoria.almacen, consultar, ahora: utc('2026-11-16T02:00:00Z') });
+  assert.equal(r.motivo, 'anteriores');
+  // A la fuente solo se le pide la nómina; la segunda estimación se resuelve con el propio calendario.
+  assert.deepEqual(peticiones[0]?.paraAnterior.map((e) => e.id), ['2026-11-06-us-nomina-no-agricola']);
+  let segunda = evento(memoria.actual().datos, '2026-11-25-us-pib');
+  assert.equal(segunda?.anterior?.valor, 2.8);
+  assert.equal(segunda?.anterior?.fuente, 'Dataset');
+  assert.equal(r.escribioDatos, true);
+
+  // Al publicarse, el anterior sigue siendo el avance aunque la fuente proponga otro.
+  const { consultar: publicar } = consultorFijo({ '2026-11-25-us-pib-2a-estimacion': 3 }, { BEA: { ok: true } }, { '2026-11-25-us-pib-2a-estimacion': 2.9 });
+  r = await ejecutarCorrida({ ...base, calendario: calendarioPib, almacen: memoria.almacen, consultar: publicar, ahora: utc('2026-11-25T13:30:00Z') });
+  segunda = evento(memoria.actual().datos, '2026-11-25-us-pib');
+  assert.equal(segunda?.real?.valor, 3);
+  assert.equal(segunda?.anterior?.valor, 2.8);
+});
+
+test('un anterior corregido a mano no se consulta ni se reemplaza', async () => {
+  const memoria = almacenMemoria();
+  const { correcciones } = leerCorrecciones('[{"fecha":"2026-11-06","pais":"US","indicador":"Nómina no agrícola","anterior":30}]');
+  const { consultar, peticiones } = consultorFijo({}, { BLS: { ok: true } }, { '2026-11-06-us-nomina-no-agricola': 22, '2026-10-29-us-pib-avance': 3.8 });
+  await ejecutarCorrida({ ...base, calendario: calendarioPib, correcciones, almacen: memoria.almacen, consultar, ahora: utc('2026-11-01T02:00:00Z') });
+  assert.deepEqual(peticiones[0]?.paraAnterior.map((e) => e.id), ['2026-10-29-us-pib-avance']);
+  const nomina = evento(memoria.actual().datos, '2026-11-06-us-nomina');
+  assert.equal(nomina?.anterior?.valor, 30);
+  assert.equal(nomina?.anterior?.fuente, 'Manual');
 });
