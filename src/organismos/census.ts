@@ -45,7 +45,10 @@ export async function consultarEits(serie: SerieCensus, desde: string, llave: st
   const respuesta = await obtener(url, { redirect: 'manual' });
   if (respuesta.status >= 300 && respuesta.status < 400) {
     await respuesta.body?.cancel().catch(() => {});
-    throw new ErrorFuente('Census: la llave falta o no es válida');
+    const destino = respuesta.headers.get('location') ?? '';
+    if (destino.includes('invalid_key')) throw new ErrorFuente('Census: la llave no es válida o no se ha activado con el enlace del correo');
+    if (destino.includes('missing_key')) throw new ErrorFuente('Census: falta la llave');
+    throw new ErrorFuente(`Census: redirección inesperada (HTTP ${respuesta.status})`);
   }
   if (respuesta.status === 204) return new Map();
   let tabla: unknown;

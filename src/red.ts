@@ -38,7 +38,8 @@ export async function obtener(url: string | URL, opciones: RequestInit = {}, tie
     }
     throw new ErrorFuente(sanitizar(`Error de red${e.cause?.code ? ` (${e.cause.code})` : ''}: ${e.message}`));
   }
-  if (!respuesta.ok) {
+  const redireccionManual = opciones.redirect === 'manual' && respuesta.status >= 300 && respuesta.status < 400;
+  if (!respuesta.ok && !redireccionManual) {
     // Se consume el cuerpo para liberar la conexión.
     await respuesta.body?.cancel().catch(() => {});
     throw new ErrorFuente(`HTTP ${respuesta.status}`);

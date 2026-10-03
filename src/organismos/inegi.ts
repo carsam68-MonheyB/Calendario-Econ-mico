@@ -4,8 +4,12 @@ import { ErrorFuente, obtenerJson, sanitizar } from '../red.ts';
 import type { Observaciones } from './tipos.ts';
 
 export const URL_INEGI = 'https://www.inegi.org.mx/app/api/indicadores/desarrolladores/jsonxml/INDICATOR/';
-/** El constructor de consultas de INEGI admite hasta 10 indicadores por llamada. */
-export const MAXIMO_POR_LLAMADA = 10;
+/**
+ * La API admite hasta 10 indicadores por llamada, pero cada serie completa pesa unos 100 KB y tarda
+ * unos 2 s; con cinco series una llamada pasa de 9 s. Para respetar el límite de 8 s por llamada,
+ * va una serie por llamada y todas en paralelo.
+ */
+export const MAXIMO_POR_LLAMADA = 1;
 
 interface SerieInegi {
   INDICADOR?: string;
@@ -57,7 +61,7 @@ async function consultarGrupo(ids: string[], token: string): Promise<Map<string,
   return leerInegi(await obtenerJson<RespuestaInegi>(url));
 }
 
-/** Consulta los indicadores en grupos de hasta 10, en paralelo. */
+/** Consulta los indicadores en paralelo, en grupos de MAXIMO_POR_LLAMADA. */
 export async function consultarInegi(ids: string[], token: string): Promise<Map<string, Observaciones>> {
   const grupos: string[][] = [];
   for (let i = 0; i < ids.length; i += MAXIMO_POR_LLAMADA) grupos.push(ids.slice(i, i + MAXIMO_POR_LLAMADA));
