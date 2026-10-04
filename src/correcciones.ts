@@ -1,7 +1,7 @@
 // Correcciones manuales de respaldo: data/correcciones.json.
 //
 // Formato: una lista de objetos con fecha, pais e indicador tal como aparecen en el CSV,
-// más "real" y/o "esperado". Un valor null borra el dato. Ejemplo:
+// más "real", "esperado" y/o "anterior". Un valor null borra el dato. Ejemplo:
 // [{ "fecha": "2026-10-08", "pais": "MX", "indicador": "INPC general anual", "real": 3.76 }]
 
 import { idEvento } from './calendario.ts';
@@ -11,6 +11,7 @@ export interface Correccion {
   id: string;
   real?: number | null;
   esperado?: number | null;
+  anterior?: number | null;
 }
 
 export const FUENTE_MANUAL = 'Manual';
@@ -37,13 +38,15 @@ export function leerCorrecciones(textoJson: string): { correcciones: Correccion[
       }
       const real = valorCorregido(c.real, 'real', posicion);
       const esperado = valorCorregido(c.esperado, 'esperado', posicion);
-      if (real === undefined && esperado === undefined) {
-        throw new Error(`Corrección ${posicion}: no trae "real" ni "esperado".`);
+      const anterior = valorCorregido(c.anterior, 'anterior', posicion);
+      if (real === undefined && esperado === undefined && anterior === undefined) {
+        throw new Error(`Corrección ${posicion}: no trae "real", "esperado" ni "anterior".`);
       }
       return {
         id: idEvento(c.fecha.trim(), c.pais.trim().toUpperCase(), c.indicador.trim()),
         ...(real !== undefined && { real }),
         ...(esperado !== undefined && { esperado }),
+        ...(anterior !== undefined && { anterior }),
       };
     });
     return { correcciones, error: null };
@@ -64,7 +67,7 @@ export function aplicarCorrecciones(eventos: EventoGuardado[], correcciones: Cor
   for (const c of correcciones) {
     const evento = porId.get(c.id);
     if (!evento) continue;
-    for (const campo of ['real', 'esperado'] as const) {
+    for (const campo of ['real', 'esperado', 'anterior'] as const) {
       const nuevo = c[campo];
       if (nuevo === undefined || mismoValor(evento[campo], nuevo)) continue;
       evento[campo] = nuevo === null ? null : { valor: nuevo, fuente: FUENTE_MANUAL, url: null, obtenido: ahora.toISOString() };

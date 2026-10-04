@@ -16,9 +16,13 @@ export interface FilaCalendario {
   mejor: Mejor;
   esperado: number | null;
   real: number | null;
+  /** Último dato publicado antes del evento, si se captura a mano. */
+  anterior: number | null;
 }
 
 const COLUMNAS = ['fecha', 'hora', 'pais', 'indicador', 'periodo', 'unidad', 'tipo', 'mejor', 'esperado', 'real'] as const;
+/** Columna opcional al final: el dato anterior capturado a mano (por ejemplo para ISM, IMEF y ADP). */
+const COLUMNA_OPCIONAL = 'anterior';
 const TIPOS: readonly Tipo[] = ['nivel', 'pct', 'tasa', 'evento'];
 const MEJORES: readonly Mejor[] = ['alto', 'bajo', 'neutral'];
 
@@ -83,17 +87,20 @@ function numeroOpcional(valor: string, linea: number, columna: string): number |
 
 export function leerCalendario(texto: string): FilaCalendario[] {
   const [encabezado, ...resto] = parsearCsv(texto);
-  if (!encabezado || encabezado.map((c) => c.trim()).join(',') !== COLUMNAS.join(',')) {
-    throw new Error(`El encabezado del calendario debe ser: ${COLUMNAS.join(',')}`);
+  const nombres = (encabezado ?? []).map((c) => c.trim());
+  const conAnterior = nombres.length === COLUMNAS.length + 1 && nombres[COLUMNAS.length] === COLUMNA_OPCIONAL;
+  if (!encabezado || nombres.slice(0, COLUMNAS.length).join(',') !== COLUMNAS.join(',') || (nombres.length !== COLUMNAS.length && !conAnterior)) {
+    throw new Error(`El encabezado del calendario debe ser: ${COLUMNAS.join(',')} (y opcionalmente ${COLUMNA_OPCIONAL})`);
   }
+  const columnas = nombres.length;
   const vistos = new Set<string>();
   return resto.map((celdas, i) => {
     const linea = i + 2;
-    if (celdas.length !== COLUMNAS.length) {
-      throw new Error(`Línea ${linea}: se esperaban ${COLUMNAS.length} columnas y hay ${celdas.length}.`);
+    if (celdas.length !== columnas) {
+      throw new Error(`Línea ${linea}: se esperaban ${columnas} columnas y hay ${celdas.length}.`);
     }
-    const [fecha, hora, pais, indicador, periodo, unidad, tipo, mejor, esperado, real] = celdas.map((c) => c.trim()) as [
-      string, string, string, string, string, string, string, string, string, string,
+    const [fecha, hora, pais, indicador, periodo, unidad, tipo, mejor, esperado, real, anterior = ''] = celdas.map((c) => c.trim()) as [
+      string, string, string, string, string, string, string, string, string, string, string?,
     ];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error(`Línea ${linea}: fecha inválida (${fecha}).`);
     if (hora !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) throw new Error(`Línea ${linea}: hora inválida (${hora}).`);
@@ -116,6 +123,7 @@ export function leerCalendario(texto: string): FilaCalendario[] {
       mejor: mejor as Mejor,
       esperado: numeroOpcional(esperado, linea, 'esperado'),
       real: numeroOpcional(real, linea, 'real'),
+      anterior: numeroOpcional(anterior, linea, 'anterior'),
     };
   });
 }

@@ -25,13 +25,14 @@ export function sincronizar(calendario: FilaCalendario[], guardados: Datos | nul
   const previos = new Map((guardados?.eventos ?? []).map((e) => [e.id, e]));
   const eventos = calendario.map((fila): EventoGuardado => {
     const previo = previos.get(fila.id);
-    const { esperado, real, ...fijos } = fila;
+    const { esperado, real, anterior, ...fijos } = fila;
     // Un valor capturado en el CSV se fecha a la hora de publicación del evento, no a la de lectura.
     const capturado = ventanas(fila).inicio;
     return {
       ...fijos,
       esperado: elegir(previo?.esperado ?? null, esperado, capturado),
       real: elegir(previo?.real ?? null, real, capturado),
+      anterior: elegir(previo?.anterior ?? null, anterior, capturado),
       revision: previo?.revision ?? null,
       estado: previo?.estado ?? 'pendiente',
       actualizado: previo?.actualizado ?? null,

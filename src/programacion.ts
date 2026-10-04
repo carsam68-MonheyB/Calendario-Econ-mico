@@ -76,6 +76,13 @@ export function tocaConsultar(fila: FilaConHorario, ahora: Date): boolean {
   }
 }
 
+/** Horas del centro en que se completa el dato anterior de los eventos de los próximos días (minuto 0). */
+export const HORAS_DE_ANTERIORES = [5, 20, 21, 22];
+
+export function tocaRevisarAnteriores(ahora: Date): boolean {
+  return ahora.getUTCMinutes() === 0 && HORAS_DE_ANTERIORES.includes(horaCdmx(ahora));
+}
+
 export type EstadoVisible = 'pendiente' | 'esperando' | 'publicado' | 'retrasado' | 'sin-fuente';
 
 /** Momento desde el que un evento sin valores (minutas, informes) se considera publicado. */

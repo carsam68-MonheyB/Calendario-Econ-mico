@@ -3,7 +3,7 @@
 import type { Consultor, ResultadoConsulta, ValorObtenido } from './actualizador.ts';
 import type { Configuracion, Llaves } from './config.ts';
 import { VARIABLES_DE_LLAVES } from './config.ts';
-import { calcular, claveSerie, MAPEO_OFICIAL, type Mapeo, type Receta, type Serie } from './fuentes.ts';
+import { calcular, calcularAnterior, claveSerie, MAPEO_OFICIAL, type Mapeo, type Organismo, type Receta, type Serie } from './fuentes.ts';
 import { indicadorDe } from './indicadores.ts';
 import type { EventoGuardado } from './modelo.ts';
 import { consultarAnuncios, consultarSie, SERIE_TASA_OBJETIVO, tasaDesdeTitulo } from './organismos/banxico.ts';
@@ -22,8 +22,10 @@ interface Pedido {
   evento: EventoGuardado;
   periodo: Periodo;
   mapeo: Mapeo;
-  /** true si el evento espera su primer dato; false si solo se revisa por revisiones. */
+  /** true si el evento espera su primer dato real. */
   solicitado: boolean;
+  /** true si hay que obtener el último dato publicado antes del evento. */
+  anterior: boolean;
 }
 
 interface Lote {
@@ -160,12 +162,22 @@ async function consultarSeries(pares: { serie: Serie; pedido: Pedido }[], llaves
   await Promise.all(tareas);
 }
 
-function valorDe(recetas: Receta[], pedido: Pedido, lote: Lote): number | null {
+type Resultado = { valor: number; organismo: Organismo } | 'fallo' | null;
+
+/**
+ * Primer valor que dé alguna receta cuyo organismo respondió. 'fallo' si ningún organismo de las recetas
+ * respondió (candidato a respaldo); null si respondieron pero aún no traen el periodo.
+ */
+function calcularCon(recetas: Receta[], pedido: Pedido, lote: Lote, anterior: boolean): Resultado {
+  let alguno = false;
   for (const receta of recetas) {
-    const valor = calcular(lote.datos.get(claveSerie(receta.serie)), receta.calculo, pedido.periodo);
-    if (valor !== null && Number.isFinite(valor)) return valor;
+    if (lote.fallidos.has(receta.serie.organismo)) continue;
+    alguno = true;
+    const obs = lote.datos.get(claveSerie(receta.serie));
+    const valor = anterior ? calcularAnterior(obs, receta.calculo, pedido.periodo) : calcular(obs, receta.calculo, pedido.periodo);
+    if (valor !== null && Number.isFinite(valor)) return { valor, organismo: receta.serie.organismo };
   }
-  return null;
+  return alguno ? null : 'fallo';
 }
 
 /**
@@ -173,45 +185,67 @@ function valorDe(recetas: Receta[], pedido: Pedido, lote: Lote): number | null {
  * solo se aceptan si BEA marca la tabla como revisada el día del evento o después.
  */
 function vintageValida(pedido: Pedido, lote: Lote): boolean {
-  if (!pedido.solicitado || indicadorDe(pedido.evento).clave !== 'us.pib') return true;
+  if (indicadorDe(pedido.evento).clave !== 'us.pib') return true;
   const revisado = lote.revisiones.get('T10101');
   if (revisado) return revisado >= pedido.evento.fecha;
   return (indicadorDe(pedido.evento).estimacion ?? 1) === 1;
 }
 
+const recetasAnterior = (mapeo: Mapeo) => mapeo.anterior ?? mapeo.primaria;
+
 export function crearConsultorOficial(config: Configuracion): Consultor {
-  return async ({ aConsultar, paraRevision }) => {
+  return async ({ aConsultar, paraRevision, paraAnterior }) => {
     const solicitados = new Set(aConsultar.map((e) => e.id));
+    const conAnterior = new Set([...aConsultar, ...paraAnterior].map((e) => e.id));
     const pedidos: Pedido[] = [];
-    for (const evento of [...aConsultar, ...paraRevision]) {
+    const vistos = new Set<string>();
+    for (const evento of [...aConsultar, ...paraRevision, ...paraAnterior]) {
+      if (vistos.has(evento.id)) continue; // Un evento puede venir para revisión y para su anterior a la vez.
+      vistos.add(evento.id);
       const mapeo = MAPEO_OFICIAL[indicadorDe(evento).clave];
       const periodo = periodoDeEvento(evento);
-      if (mapeo && periodo) pedidos.push({ evento, periodo, mapeo, solicitado: solicitados.has(evento.id) });
+      if (mapeo && periodo) {
+        pedidos.push({ evento, periodo, mapeo, solicitado: solicitados.has(evento.id), anterior: conAnterior.has(evento.id) });
+      }
     }
 
     const lote = nuevoLote();
     await consultarSeries(
-      pedidos.flatMap((pedido) => pedido.mapeo.primaria.map((r) => ({ serie: r.serie, pedido }))),
+      pedidos.flatMap((pedido) => {
+        const recetas = pedido.solicitado || !pedido.anterior ? [...pedido.mapeo.primaria] : [];
+        if (pedido.anterior) recetas.push(...recetasAnterior(pedido.mapeo));
+        return recetas.map((r) => ({ serie: r.serie, pedido }));
+      }),
       config.llaves,
       lote,
     );
 
     const valores: ValorObtenido[] = [];
-    const conRespaldo: Pedido[] = [];
+    const anteriores: ValorObtenido[] = [];
+    const respaldoReal: Pedido[] = [];
+    const respaldoAnterior: Pedido[] = [];
     for (const pedido of pedidos) {
-      const organismo = pedido.mapeo.primaria[0]!.serie.organismo;
-      if (lote.fallidos.has(organismo)) {
-        const estimacion = indicadorDe(pedido.evento).estimacion ?? 1;
-        if (pedido.solicitado && pedido.mapeo.respaldo && estimacion === 1) conRespaldo.push(pedido);
-        continue;
-      }
-      const valor = valorDe(pedido.mapeo.primaria, pedido, lote);
-      if (valor === null || !vintageValida(pedido, lote)) continue;
       const url = lote.comunicados.get(pedido.evento.fecha) ?? pedido.mapeo.url;
-      valores.push({ id: pedido.evento.id, valor, fuente: organismo, url });
+      if (pedido.solicitado || !pedido.anterior) {
+        const r = calcularCon(pedido.mapeo.primaria, pedido, lote, false);
+        if (r === 'fallo') {
+          if (pedido.solicitado && pedido.mapeo.respaldo && (indicadorDe(pedido.evento).estimacion ?? 1) === 1) respaldoReal.push(pedido);
+        } else if (r && (!pedido.solicitado || vintageValida(pedido, lote))) {
+          valores.push({ id: pedido.evento.id, valor: r.valor, fuente: r.organismo, url });
+        }
+      }
+      if (pedido.anterior) {
+        const r = calcularCon(recetasAnterior(pedido.mapeo), pedido, lote, true);
+        if (r === 'fallo') {
+          if (pedido.mapeo.respaldo) respaldoAnterior.push(pedido);
+        } else if (r) {
+          anteriores.push({ id: pedido.evento.id, valor: r.valor, fuente: r.organismo, url: pedido.mapeo.url });
+        }
+      }
     }
 
-    // Respaldo con FRED solo para los eventos cuya fuente primaria no respondió.
+    // Respaldo con FRED solo para lo que la fuente primaria no pudo responder.
+    const conRespaldo = [...new Set([...respaldoReal, ...respaldoAnterior])];
     if (conRespaldo.length > 0) {
       const respaldo = nuevoLote();
       await consultarSeries(
@@ -221,13 +255,19 @@ export function crearConsultorOficial(config: Configuracion): Consultor {
       );
       Object.assign(lote.intentos, respaldo.intentos);
       for (const pedido of conRespaldo) {
-        const valor = valorDe(pedido.mapeo.respaldo!, pedido, respaldo);
-        if (valor === null) continue;
         const id = claveSerie(pedido.mapeo.respaldo![0]!.serie);
-        valores.push({ id: pedido.evento.id, valor, fuente: 'FRED (respaldo)', url: `https://fred.stlouisfed.org/series/${id}` });
+        const url = `https://fred.stlouisfed.org/series/${id}`;
+        if (respaldoReal.includes(pedido)) {
+          const r = calcularCon(pedido.mapeo.respaldo!, pedido, respaldo, false);
+          if (r && r !== 'fallo') valores.push({ id: pedido.evento.id, valor: r.valor, fuente: 'FRED (respaldo)', url });
+        }
+        if (respaldoAnterior.includes(pedido)) {
+          const r = calcularCon(pedido.mapeo.respaldo!, pedido, respaldo, true);
+          if (r && r !== 'fallo') anteriores.push({ id: pedido.evento.id, valor: r.valor, fuente: 'FRED (respaldo)', url });
+        }
       }
     }
 
-    return { valores, intentos: lote.intentos };
+    return { valores, anteriores, intentos: lote.intentos };
   };
 }
