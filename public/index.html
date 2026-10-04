@@ -440,7 +440,7 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 <header class="cabecera">
   <div>
     <h1>Calendario económico</h1>
-    <p class="cabecera__sub">México y EUA · 30 sep a 31 dic 2026 · Horas del centro de México</p>
+    <p class="cabecera__sub" id="subtitulo">México y EUA · Horas del centro de México</p>
   </div>
   <div class="cabecera__estado">
     <p id="frescura" class="frescura" data-tono="cargando" role="status">Cargando…</p>
@@ -458,9 +458,6 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
     <label class="campo">Mes
       <select id="filtro-mes">
         <option value="todos">Todos</option>
-        <option value="10">Octubre</option>
-        <option value="11">Noviembre</option>
-        <option value="12">Diciembre</option>
       </select>
     </label>
     <div class="segmentos" role="group" aria-label="Estado">
@@ -509,11 +506,29 @@ const FERIADOS = [
   { fecha: '2026-11-26', pais: 'US', nombre: 'Día de Acción de Gracias' },
   { fecha: '2026-12-25', pais: 'MX', nombre: 'Navidad' },
   { fecha: '2026-12-25', pais: 'US', nombre: 'Navidad' },
+  { fecha: '2027-01-01', pais: 'MX', nombre: 'Año Nuevo' },
+  { fecha: '2027-01-01', pais: 'US', nombre: 'Año Nuevo' },
+  { fecha: '2027-01-18', pais: 'US', nombre: 'Día de Martin Luther King Jr.' },
+  { fecha: '2027-02-01', pais: 'MX', nombre: 'Día de la Constitución' },
+  { fecha: '2027-02-15', pais: 'US', nombre: 'Día de los Presidentes' },
+  { fecha: '2027-03-15', pais: 'MX', nombre: 'Natalicio de Benito Juárez' },
+  { fecha: '2027-05-01', pais: 'MX', nombre: 'Día del Trabajo' },
+  { fecha: '2027-05-31', pais: 'US', nombre: 'Memorial Day' },
+  { fecha: '2027-06-18', pais: 'US', nombre: 'Juneteenth (observado)' },
 ];
-const SILENCIO_FED = [
-  { desde: '2026-10-17', hasta: '2026-10-29', texto: 'Periodo de silencio de la Fed: del 17 al 29 de octubre' },
-  { desde: '2026-11-28', hasta: '2026-12-10', texto: 'Periodo de silencio de la Fed: del 28 de noviembre al 10 de diciembre' },
-];
+// Periodo de silencio de la Fed: del segundo sábado anterior a la reunión al jueves siguiente.
+// Se calcula a partir de las decisiones del calendario (reuniones de martes y miércoles).
+function silenciosFed(eventos) {
+  return eventos
+    .filter((e) => e.pais === 'US' && e.indicador.startsWith('Decisión de la Fed'))
+    .map((e) => {
+      const desde = sumarDias(e.fecha, -11);
+      const hasta = sumarDias(e.fecha, 1);
+      const a = partesFecha(desde), b = partesFecha(hasta);
+      const rango = a.m === b.m ? `del ${a.d} al ${b.d} de ${MESES_LARGOS[b.m - 1]}` : `del ${a.d} de ${MESES_LARGOS[a.m - 1]} al ${b.d} de ${MESES_LARGOS[b.m - 1]}`;
+      return { desde, hasta, texto: `Periodo de silencio de la Fed: ${rango}` };
+    });
+}
 
 // Unidad: sufijo pegado al número y nota pequeña a la derecha.
 const UNIDADES = {
@@ -556,7 +571,10 @@ const estado = {
   temporizador: null,
   primeraCarga: true,
   firma: '',
-  filtros: { pais: 'todos', mes: 'todos', estado: 'todos', texto: '' },
+  // 'actual' = el mes en curso; se resuelve en cada render para seguir al calendario.
+  filtros: { pais: 'todos', mes: 'actual', estado: 'todos', texto: '' },
+  mesVisible: 'todos',
+  silencios: [],
 };
 
 /* Utilidades */
@@ -564,7 +582,7 @@ const $ = (s) => document.querySelector(s);
 const escapar = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const normalizar = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const leerPreferencias = () => { try { return JSON.parse(localStorage.getItem('calendario:filtros') ?? 'null'); } catch { return null; } };
-const guardarPreferencias = () => { try { localStorage.setItem('calendario:filtros', JSON.stringify({ ...estado.filtros, texto: '' })); } catch {} };
+const guardarPreferencias = () => { try { localStorage.setItem('calendario:filtros', JSON.stringify({ ...estado.filtros, mes: 'actual', texto: '' })); } catch {} };
 const leerResaltados = () => { try { return new Set(JSON.parse(localStorage.getItem('calendario:resaltados') ?? '[]')); } catch { return new Set(); } };
 const guardarResaltados = (s) => { try { localStorage.setItem('calendario:resaltados', JSON.stringify([...s].slice(-200))); } catch {} };
 
@@ -584,6 +602,27 @@ function fechaCorta(fecha) { const { m, d } = partesFecha(fecha); return `${DIAS
 function horaCorta(hora) { if (!hora) return '—'; const [h, mi] = hora.split(':'); return `${Number(h)}:${mi}`; }
 function hoyCdmx(ahora = Date.now()) { return new Date(ahora - DESFASE_CDMX_MS).toISOString().slice(0, 10); }
 function lunesDe(fecha) { return sumarDias(fecha, -((diaSemana(fecha) + 6) % 7)); }
+function fechaLarga(fecha) { const { a, m, d } = partesFecha(fecha); return `${d} ${MESES[m - 1]} ${a}`; }
+function etiquetaMes(ym) { const [a, m] = ym.split('-').map(Number); const nombre = MESES_LARGOS[m - 1]; return `${nombre[0].toUpperCase()}${nombre.slice(1)} ${a}`; }
+function mesesDelCalendario(vista) { return [...new Set((vista?.eventos ?? []).map((e) => e.fecha.slice(0, 7)))].sort(); }
+/* El filtro "mes en curso" se convierte en el mes de hoy si el calendario lo tiene; si no, en "Todos". */
+function resolverMes(vista, hoy) {
+  const mes = estado.filtros.mes;
+  if (mes !== 'actual') return mes;
+  return mesesDelCalendario(vista).includes(hoy.slice(0, 7)) ? hoy.slice(0, 7) : 'todos';
+}
+function llenarMeses(vista) {
+  const select = $('#filtro-mes');
+  const meses = mesesDelCalendario(vista);
+  const actuales = [...select.options].slice(1).map((o) => o.value);
+  if (actuales.join() === meses.join()) return;
+  select.replaceChildren(new Option('Todos', 'todos'), ...meses.map((ym) => new Option(etiquetaMes(ym), ym)));
+}
+function pintarSubtitulo(vista) {
+  const fechas = (vista?.eventos ?? []).map((e) => e.fecha).sort();
+  const rango = fechas.length ? ` · ${fechaLarga(fechas[0])} a ${fechaLarga(fechas.at(-1))}` : '';
+  $('#subtitulo').textContent = `México y EUA${rango} · Horas del centro de México`;
+}
 function etiquetaSemana(lunes) {
   const viernes = sumarDias(lunes, 4);
   const a = partesFecha(lunes), b = partesFecha(viernes);
@@ -650,7 +689,7 @@ function htmlVariacion(e) {
 function pasaFiltros(e, est) {
   const f = estado.filtros;
   if (f.pais !== 'todos' && e.pais !== f.pais) return false;
-  if (f.mes !== 'todos' && Number(e.fecha.slice(5, 7)) !== Number(f.mes)) return false;
+  if (estado.mesVisible !== 'todos' && e.fecha.slice(0, 7) !== estado.mesVisible) return false;
   if (f.estado === 'publicados' && est !== 'publicado') return false;
   if (f.estado === 'pendientes' && est === 'publicado') return false;
   if (f.texto && !normalizar(e.indicador).includes(normalizar(f.texto))) return false;
@@ -659,7 +698,7 @@ function pasaFiltros(e, est) {
 function feriadosVisibles(fecha) {
   const f = estado.filtros;
   if (f.estado !== 'todos' || f.texto) return [];
-  if (f.mes !== 'todos' && Number(fecha.slice(5, 7)) !== Number(f.mes)) return [];
+  if (estado.mesVisible !== 'todos' && fecha.slice(0, 7) !== estado.mesVisible) return [];
   return FERIADOS.filter((h) => h.fecha === fecha && (f.pais === 'todos' || f.pais === h.pais));
 }
 
@@ -669,6 +708,9 @@ function render({ desplazar = false } = {}) {
   if (!vista) return;
   const ahora = Date.now();
   const hoy = hoyCdmx(ahora);
+  llenarMeses(vista);
+  estado.mesVisible = resolverMes(vista, hoy);
+  pintarFiltros();
   const popover = $('#popover');
   if (popover.matches(':popover-open')) popover.hidePopover();
   const foco = document.activeElement?.closest('[data-info]');
@@ -701,7 +743,7 @@ function render({ desplazar = false } = {}) {
   for (const lunes of [...semanas.keys()].sort()) {
     const domingo = sumarDias(lunes, 6);
     const idSemana = `semana-${lunes}`;
-    const notas = (estado.filtros.pais === 'MX' ? [] : SILENCIO_FED)
+    const notas = (estado.filtros.pais === 'MX' ? [] : estado.silencios)
       .filter((s) => s.desde <= domingo && s.hasta >= lunes)
       .map((s) => `<p class="nota-semana">${escapar(s.texto)}</p>`).join('');
     html += `<section class="semana" aria-labelledby="${idSemana}"><div class="semana__cabecera"><h2 id="${idSemana}">${etiquetaSemana(lunes)}</h2>${notas}</div>`;
@@ -860,6 +902,8 @@ async function cargar() {
       const previos = new Map((estado.vista?.eventos ?? []).map((e) => [e.id, e]));
       const nuevos = estado.vista ? vista.eventos.filter((e) => e.real !== null && previos.get(e.id)?.real === null) : [];
       estado.vista = vista;
+      estado.silencios = silenciosFed(vista.eventos);
+      pintarSubtitulo(vista);
       estado.etag = respuesta.headers.get('ETag');
       estado.ultimoExito = Date.now();
       estado.error = false;
@@ -926,7 +970,7 @@ function pintarFiltros() {
   for (const b of document.querySelectorAll('[data-filtro]')) {
     b.setAttribute('aria-pressed', String(estado.filtros[b.dataset.filtro] === b.dataset.valor));
   }
-  $('#filtro-mes').value = estado.filtros.mes;
+  $('#filtro-mes').value = estado.mesVisible;
 }
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-filtro]');
@@ -958,7 +1002,7 @@ setInterval(() => {
 }, 30_000);
 
 const preferencias = leerPreferencias();
-if (preferencias) Object.assign(estado.filtros, preferencias, { texto: '' });
+if (preferencias) Object.assign(estado.filtros, preferencias, { mes: 'actual', texto: '' });
 pintarFiltros();
 prepararBotonAvisos();
 cargar();

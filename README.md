@@ -15,7 +15,7 @@ La interfaz va en español y los números en formato es-MX. Las horas son del ce
 | `netlify/functions/datos.mts` | `GET /api/datos` y `GET /api/estado`, con `Cache-Control: no-store`. |
 | `src/fuentes.ts` | Mapeo indicador → fuente y serie, y el cálculo de cada dato. |
 | `src/calculos.ts` | Variación contra lo esperado, puntos porcentuales, puntos base y redondeo. |
-| `data/calendario.csv` | Las 91 filas del calendario. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
+| `data/calendario.csv` | El calendario: las 91 filas de la especificación (30 sep a 30 dic 2026) más las fechas de 2027 ya publicadas. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
 | `data/correcciones.json` | Correcciones manuales de respaldo. |
 
 Netlify Blobs guarda todo en el store `calendario`:
@@ -45,6 +45,7 @@ Además, a las 5:00, 20:00, 21:00 y 22:00 del centro la corrida completa el dato
 ### La página
 
 - Si hay un evento entre 2 minutos antes y 30 minutos después de su hora, vuelve a pedir datos cada 30 segundos; si no, cada 10 minutos. Se pausa con la pestaña oculta y actualiza al volver. Usa `If-None-Match`, así que una respuesta sin cambios no trae cuerpo.
+- Abre en el mes en curso; el filtro **Mes** permite ver los meses anteriores y los siguientes, o **Todos**. El subtítulo muestra el rango de fechas que hay en el calendario.
 - Columnas por fila: **Anterior** (el último dato vigente del indicador, el del periodo previo), **Esperado**, **Real** y **Variación**. Al tocar un valor se ve su fuente y la hora en que se obtuvo.
 - Estados por fila: "Pendiente", "Esperando dato", "Publicado" y "Retrasado". ISM, IMEF y ADP muestran "Sin fuente automática" en modo oficial.
 - Un dato nuevo resalta su fila una sola vez y muestra "Nuevo" durante 10 minutos. Con permiso del navegador, avisa con una notificación como "EUA, CPI general anual sep: 3.1% vs 3.0% esperado (+3.3%)".
@@ -238,6 +239,25 @@ Los equipos creados desde el 28 de julio de 2026 crean proyectos privados: solo 
 1. En el panel del equipo, ve a **Usage & billing**.
 2. Abre **Credit usage breakdown** para ver cómputo, peticiones, ancho de banda y deploys a producción.
 3. **Account usage insights** muestra los créditos por día.
+
+## Mantenimiento del calendario
+
+Las fechas salen de los calendarios oficiales que cada institución publica por año (INEGI, por semestre). Para que el calendario siga, hay que agregar las filas del periodo siguiente al CSV y hacer un deploy (15 créditos). Pasos:
+
+1. Descarga los calendarios oficiales: INEGI (`Calendario (pdf)` en la sala de prensa), BLS (`Schedule of releases`), BEA (`Release schedule`), Census (`Economic Indicator Calendar`), Fed (`FOMC meeting calendars`), Banxico (`Calendario de decisiones de política monetaria`), SHCP, IMEF, ISM y ADP.
+2. Agrega una fila por publicación con el mismo nombre de indicador que ya usa el CSV, el `periodo` de referencia y la hora del centro de México. Las decisiones y minutas de la Fed se publican a las 14:00 hora del este: 13:00 del centro en horario de invierno y 12:00 en horario de verano de EUA. Las minutas salen tres semanas después de cada decisión.
+3. Si un indicador es nuevo, agrégalo a `src/indicadores.ts` y a `src/fuentes.ts`.
+4. Corre `npm test` (ajusta el conteo de filas en `test/calendario.test.ts`) y abre un PR.
+
+Estado de 2027 al 3 de octubre de 2026:
+
+| Institución | Calendario 2027 | En el CSV |
+|---|---|---|
+| INEGI | Primer semestre publicado (`cal_2027.pdf`) | Sí, enero a junio |
+| Fed | Reuniones publicadas | Sí: 8 decisiones y sus minutas (tres semanas después, 14:00 del este) |
+| Banxico | Solo la minuta del 7 de enero (calendario 2026, nota 5) | Sí |
+| BLS, BEA, Census | Pendientes (suelen publicarse entre noviembre y diciembre) | No |
+| Banxico (decisiones, informes, remesas), SHCP, IMEF, ISM, ADP, Libro Beige | Pendientes | No |
 
 ## Corrección manual (respaldo)
 
