@@ -158,6 +158,35 @@ a { color: var(--acento); }
 .boton[aria-pressed="true"] { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
 
 /* Filtros */
+.fix {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 6;
+  background: var(--acento-suave);
+  border-bottom: 1px solid var(--linea);
+}
+.fix[hidden] { display: none; }
+.fix__interior {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fix__etiqueta { font-weight: 600; letter-spacing: 0.02em; }
+.fix__valor { font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; }
+.fix__unidad, .fix__fecha { color: var(--tinta-2); }
+.fix__cambio { font-variant-numeric: tabular-nums; color: var(--neutral); }
+.fix__cambio[data-direccion="abajo"] { color: var(--favorable); }
+.fix__cambio[data-direccion="arriba"] { color: var(--desfavorable); }
+.fix__fuente { margin-left: auto; color: var(--tinta-2); font-size: 13px; }
+.fix__corto { display: none; }
+.con-fix .filtros { top: calc(env(safe-area-inset-top, 0px) + 37px); }
 .filtros {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -389,6 +418,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   /* En celular los filtros no se quedan fijos: el espacio vertical es para los datos. */
   .filtros { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .filtros__interior { gap: 8px; padding: 10px 16px; }
+  .fix__interior { gap: 8px; font-size: 13px; }
+  .fix__largo { display: none; }
+  .fix__corto { display: inline; }
   .campo--busqueda { flex-basis: 100%; }
   .semana { margin-top: 22px; }
   .tabla, .tabla tbody, .tabla tr, .tabla td { display: block; }
@@ -437,6 +469,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 </style>
 </head>
 <body>
+<div class="fix" id="fix" hidden aria-label="Tipo de cambio FIX de Banxico, pesos por dólar">
+  <div class="fix__interior" role="status"></div>
+</div>
 <header class="cabecera">
   <div>
     <h1>Calendario económico</h1>
@@ -909,6 +944,7 @@ async function cargar() {
       estado.error = false;
       for (const e of nuevos) { resaltados.delete(e.id); pendientesDeResaltar.add(e.id); }
       pintarPie();
+      pintarFix();
       render({ desplazar: estado.primeraCarga });
       estado.firma = firma(Date.now());
       estado.primeraCarga = false;
@@ -924,6 +960,31 @@ async function cargar() {
   }
   pintarFrescura();
   programar();
+}
+
+/* Barra del tipo de cambio FIX. Sube o baja respecto al FIX del día hábil anterior. */
+function pintarFix() {
+  const barra = $('#fix');
+  const f = estado.vista?.fix;
+  document.documentElement.classList.toggle('con-fix', Boolean(f));
+  if (!f) { barra.hidden = true; return; }
+  let cambio = '';
+  if (f.cambio && f.anterior) {
+    const direccion = f.cambio.absoluto > 0 ? 'arriba' : f.cambio.absoluto < 0 ? 'abajo' : 'igual';
+    const flecha = { arriba: '▲', abajo: '▼', igual: '=' }[direccion];
+    const titulo = `Cambio contra el FIX del ${fechaCorta(f.anterior.fecha)} (${formatoNumero(f.anterior.valor, 4)})`;
+    cambio = `<span class="fix__cambio" data-direccion="${direccion}" title="${escapar(titulo)}">${flecha} ` +
+      `<span class="fix__largo">${conSigno(f.cambio.absoluto, 4)} (${conSigno(f.cambio.porcentaje, 2)}%)</span>` +
+      `<span class="fix__corto">${conSigno(f.cambio.porcentaje, 2)}%</span></span>`;
+  }
+  const obtenido = fechaHora.format(new Date(f.obtenido));
+  barra.querySelector('.fix__interior').innerHTML =
+    `<span class="fix__etiqueta"><span class="fix__largo">Tipo de cambio </span>FIX</span>` +
+    `<strong class="fix__valor">${formatoNumero(f.valor, 4)}</strong>` +
+    `<span class="fix__unidad fix__largo">MXN por USD</span>` +
+    `<span class="fix__fecha">· ${escapar(fechaCorta(f.fecha))}</span>${cambio}` +
+    `<a class="fix__fuente" href="${escapar(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`Fuente: ${f.fuente}. Obtenido ${obtenido}`)}">${escapar(f.fuente)}</a>`;
+  barra.hidden = false;
 }
 
 function pintarPie() {

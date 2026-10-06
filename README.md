@@ -23,6 +23,7 @@ Netlify Blobs guarda todo en el store `calendario`:
 - `datos`: el calendario con anterior, esperado, real, estado, fuente y hora de actualización.
 - `estado`: por fuente, el último intento, la última respuesta correcta y el último error.
 - `consenso`: el esperado que se buscó y sus intentos.
+- `fix`: el tipo de cambio FIX más reciente y el del día hábil anterior.
 
 Los datos nunca se guardan en el repositorio. Que llegue un dato no genera commits ni deploys. Si cambias el CSV, en el siguiente deploy se actualizan fechas, horas y nombres sin perder los datos ya obtenidos.
 
@@ -116,6 +117,15 @@ La columna **Anterior** muestra el último dato vigente del indicador antes del 
 Toma del calendario de Trading Economics el campo `Actual` como dato real. Cubre también ISM, IMEF y ADP. Cada fila del CSV se busca por país, fecha de publicación, nombre del evento en TE y periodo; el mapeo está en `src/organismos/te.ts`.
 
 Los nombres de los eventos de TE no se pudieron comprobar sin una llave de pago. Si alguno no coincide, el evento se queda sin dato y `/api/estado` lo informa; se corrige editando `NOMBRES_TE`.
+
+## Tipo de cambio FIX
+
+La barra fija de arriba muestra el **tipo de cambio FIX** de Banxico (pesos por dólar, 4 decimales), la tasa de referencia oficial, con la fecha a la que corresponde y el cambio contra el FIX del día hábil anterior. Toca "Banxico" para ir a la página oficial.
+
+- Fuente: serie `SF43718` del SIE de Banxico, con el mismo token `BANXICO_TOKEN`.
+- Cuándo: Banxico determina el FIX a las 12:00. En días hábiles, de 12:00 a 20:00 del centro, la corrida pregunta cada 30 minutos hasta obtener el del día; mientras tanto se muestra el anterior con su fecha. La primera vez se obtiene en la siguiente corrida de múltiplo de 15 minutos.
+- Costo: una consulta de unos cuantos KB al día dentro de la corrida que ya existe; Blobs se escribe solo cuando el valor cambia.
+- Es un dato diario, no un precio intradía. `/api/estado` muestra la fecha del FIX guardado y el último error, si lo hubo.
 
 ## Fuente del esperado
 
