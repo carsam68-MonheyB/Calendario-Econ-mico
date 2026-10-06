@@ -135,7 +135,7 @@ El **tipo de cambio FIX** de Banxico, la tasa de referencia oficial, con la fech
 
 ### Intradía
 
-El **precio de mercado USD/MXN al momento**, con la hora de la cotización (centro de México) y el cambio contra el cierre anterior. Solo aparece si está configurada la llave `TWELVEDATA_API_KEY`; sin ella la barra muestra únicamente el FIX.
+El **precio de mercado USD/MXN al momento**, con la hora en que se consultó el mercado (centro de México) y el cambio contra el cierre anterior. Solo aparece si está configurada la llave `TWELVEDATA_API_KEY`; sin ella la barra muestra únicamente el FIX.
 
 - Fuente: [Twelve Data](https://twelvedata.com/), cotización `USD/MXN` (`/quote`). El plan gratuito ("Basic") alcanza: tiene un límite diario de consultas y aquí se hace como mucho una cada 2 minutos.
 - Cómo: la página pide `GET /api/tipo-cambio` al abrirse y cada minuto y medio mientras la pestaña está visible. La función responde desde un caché en Blobs y solo consulta al proveedor si el caché tiene más de 2 minutos (30 con el mercado cerrado). Netlify además sirve la misma respuesta a todos los visitantes durante un minuto, así que ni los visitantes ni las pestañas abiertas multiplican las llamadas.

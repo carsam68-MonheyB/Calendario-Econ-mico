@@ -50,6 +50,7 @@ test('consulta al proveedor solo cuando el caché venció; la llave va en el enc
   let m = await obtenerMercado(leerConfiguracion(), memoria.almacen, utc('2026-10-06T19:21:00Z'));
   assert.equal(m.valor, 18.215);
   assert.equal(m.obtenido, '2026-10-06T19:21:00.000Z');
+  assert.equal(m.hora, m.obtenido, 'la hora mostrada es la de la consulta, no la de la vela diaria del proveedor');
   assert.equal(llamadas.length, 1);
   assert.match(llamadas[0]!.url, /^https:\/\/api\.twelvedata\.com\/quote\?symbol=USD%2FMXN$/);
   assert.equal(llamadas[0]!.auth, 'apikey llave-twelve-secreta-777');
