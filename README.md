@@ -13,6 +13,7 @@ La interfaz va en español y los números en formato es-MX. Las horas son del ce
 | `netlify/functions/actualizar-cada-15.mts` | Función programada cada 15 minutos el resto del día y los fines de semana. Netlify admite un solo horario por función, por eso son dos archivos. |
 | `netlify/functions/consenso-background.mts` | Background Function (hasta 15 minutos) que busca el consenso con Claude. |
 | `netlify/functions/datos.mts` | `GET /api/datos` y `GET /api/estado`, con `Cache-Control: no-store`. |
+| `netlify/functions/tipo-cambio.mts` | `GET /api/tipo-cambio`: el precio de mercado USD/MXN al momento, desde un caché de 2 minutos en Blobs. |
 | `src/fuentes.ts` | Mapeo indicador → fuente y serie, y el cálculo de cada dato. |
 | `src/calculos.ts` | Variación contra lo esperado, puntos porcentuales, puntos base y redondeo. |
 | `data/calendario.csv` | El calendario: las 91 filas de la especificación (30 sep a 30 dic 2026) más las fechas de 2027 ya publicadas. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
@@ -24,6 +25,7 @@ Netlify Blobs guarda todo en el store `calendario`:
 - `estado`: por fuente, el último intento, la última respuesta correcta y el último error.
 - `consenso`: el esperado que se buscó y sus intentos.
 - `fix`: el tipo de cambio FIX más reciente y el del día hábil anterior.
+- `mercado`: la última cotización intradía USD/MXN y la hora en que se obtuvo.
 
 Los datos nunca se guardan en el repositorio. Que llegue un dato no genera commits ni deploys. Si cambias el CSV, en el siguiente deploy se actualizan fechas, horas y nombres sin perder los datos ya obtenidos.
 
@@ -118,14 +120,34 @@ Toma del calendario de Trading Economics el campo `Actual` como dato real. Cubre
 
 Los nombres de los eventos de TE no se pudieron comprobar sin una llave de pago. Si alguno no coincide, el evento se queda sin dato y `/api/estado` lo informa; se corrige editando `NOMBRES_TE`.
 
-## Tipo de cambio FIX
+## Tipo de cambio: FIX e intradía
 
-La barra fija de arriba muestra el **tipo de cambio FIX** de Banxico (pesos por dólar, 4 decimales), la tasa de referencia oficial, con la fecha a la que corresponde y el cambio contra el FIX del día hábil anterior. Toca "Banxico" para ir a la página oficial.
+La barra fija de arriba muestra dos cifras en pesos por dólar, con 4 decimales:
+
+### FIX
+
+El **tipo de cambio FIX** de Banxico, la tasa de referencia oficial, con la fecha a la que corresponde y el cambio contra el FIX del día hábil anterior. Toca "Banxico" para ir a la página oficial.
 
 - Fuente: serie `SF43718` del SIE de Banxico, con el mismo token `BANXICO_TOKEN`.
 - Cuándo: Banxico determina el FIX a las 12:00. En días hábiles, de 12:00 a 20:00 del centro, la corrida pregunta cada 30 minutos hasta obtener el del día; mientras tanto se muestra el anterior con su fecha. La primera vez se obtiene en la siguiente corrida de múltiplo de 15 minutos.
 - Costo: una consulta de unos cuantos KB al día dentro de la corrida que ya existe; Blobs se escribe solo cuando el valor cambia.
-- Es un dato diario, no un precio intradía. `/api/estado` muestra la fecha del FIX guardado y el último error, si lo hubo.
+- Es un dato diario. `/api/estado` muestra la fecha del FIX guardado y el último error, si lo hubo.
+
+### Intradía
+
+El **precio de mercado USD/MXN al momento**, con la hora de la cotización (centro de México) y el cambio contra el cierre anterior. Solo aparece si está configurada la llave `TWELVEDATA_API_KEY`; sin ella la barra muestra únicamente el FIX.
+
+- Fuente: [Twelve Data](https://twelvedata.com/), cotización `USD/MXN` (`/quote`). El plan gratuito ("Basic") alcanza: tiene un límite diario de consultas y aquí se hace como mucho una cada 2 minutos.
+- Cómo: la página pide `GET /api/tipo-cambio` al abrirse y cada minuto y medio mientras la pestaña está visible. La función responde desde un caché en Blobs y solo consulta al proveedor si el caché tiene más de 2 minutos (30 con el mercado cerrado). Netlify además sirve la misma respuesta a todos los visitantes durante un minuto, así que ni los visitantes ni las pestañas abiertas multiplican las llamadas.
+- Si el proveedor falla, se sigue mostrando el último precio y `/api/estado` indica el error. La llave viaja en el encabezado `Authorization`, nunca en la URL.
+- Costo: unas 2 créditos al mes por cada visitante que tenga la página abierta todo el día (peticiones web a 2 créditos por 10,000).
+
+Para obtener la llave:
+
+1. Entra a https://twelvedata.com y toca **Get free API key** (o **Sign up**). Crea la cuenta con tu correo; el plan **Basic** es gratuito y no pide tarjeta.
+2. En el panel, abre **API keys** y copia la llave.
+3. En Netlify: **Project configuration → Environment variables → Add a variable**. Key: `TWELVEDATA_API_KEY`, Value: la llave, marca **Contains secret values** y guarda.
+4. Como con todas las variables, hay que volver a hacer deploy para que las funciones la tomen.
 
 ## Fuente del esperado
 
@@ -158,6 +180,7 @@ Lo capturado en el CSV o en `data/correcciones.json` siempre manda sobre el cons
 | `ANTHROPIC_API_KEY` | Llave de la API de Anthropic | `FUENTE_CONSENSO=claude` |
 | `CLAUDE_MODELO` | Otro modelo de Claude | Opcional |
 | `TE_API_KEY` | Llave de Trading Economics | Cualquier modo `tradingeconomics` |
+| `TWELVEDATA_API_KEY` | Llave de Twelve Data | Opcional; activa el precio intradía en la barra |
 
 Las llaves nunca aparecen en el código, en Blobs, en `/api/datos`, en `/api/estado` ni en la página. `/api/estado` solo dice si cada una está configurada. Los mensajes de error se limpian antes de guardarse.
 
@@ -326,6 +349,7 @@ Plan Personal: 1,000 créditos al mes compartidos por todo el equipo. En este pl
 | Corridas con consultas | ~16 publicaciones con hora al mes, casi todas resueltas en pocos minutos | ~1 (hasta ~15 si todas se retrasan) |
 | Consenso con Claude | ~16 días con eventos × ~90 s de espera | ~4 |
 | Peticiones web | Corridas programadas (si cuentan) más la página: ~21,000 × 2 por cada 10,000 | ~4 |
+| Intradía (`/api/tipo-cambio`) | ~1 petición cada 90 s por pestaña abierta, con caché de 1 minuto en la CDN | ~2 por visitante que la tenga abierta todo el día |
 | Ancho de banda | Respuestas 304 sin cuerpo; < 0.1 GB × 20 | < 2 |
 | **Total en operación normal** | | **~15 (peor caso ~30)** |
 | Deploy a producción | 15 por deploy; previews y deploys fallidos no cuestan | Solo cuando cambia el código |

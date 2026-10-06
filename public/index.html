@@ -174,18 +174,21 @@ a { color: var(--acento); }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 18px;
+  gap: 4px 28px;
   font-size: 28px;
   line-height: 1.2;
 }
-.fix__interior > * { white-space: nowrap; }
+/* Cada grupo (FIX, intradía) se acomoda como unidad y solo se parte si no cabe. */
+.fix__grupo { display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 2px 12px; }
+.fix__grupo > * { white-space: nowrap; }
 .fix__etiqueta { font-weight: 600; letter-spacing: 0.02em; }
 .fix__valor { font-weight: 700; font-size: 32px; font-variant-numeric: tabular-nums; }
 .fix__unidad, .fix__fecha { color: var(--tinta-2); }
 .fix__cambio { font-variant-numeric: tabular-nums; color: var(--neutral); }
 .fix__cambio[data-direccion="abajo"] { color: var(--favorable); }
 .fix__cambio[data-direccion="arriba"] { color: var(--desfavorable); }
-.fix__fuente { margin-left: auto; color: var(--tinta-2); font-size: 24px; }
+.fix__fuentes { margin-left: auto; color: var(--tinta-2); font-size: 24px; white-space: nowrap; }
+.fix__fuentes a { color: inherit; }
 .fix__corto { display: none; }
 /* Los filtros fijos se acomodan debajo de la barra; su alto se mide en pintarFix. */
 .con-fix .filtros { top: calc(env(safe-area-inset-top, 0px) + var(--alto-fix, 73px)); }
@@ -420,9 +423,10 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   /* En celular los filtros no se quedan fijos: el espacio vertical es para los datos. */
   .filtros { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .filtros__interior { gap: 8px; padding: 10px 16px; }
-  .fix__interior { gap: 2px 12px; font-size: 26px; min-height: 64px; padding: 8px 16px; }
-  .fix__valor { font-size: 30px; }
-  .fix__fuente { font-size: 22px; }
+  .fix__interior { gap: 2px 12px; font-size: 20px; min-height: 64px; padding: 8px 16px; }
+  .fix__grupo { flex-basis: 100%; flex-wrap: wrap; gap: 2px 8px; }
+  .fix__valor { font-size: 23px; }
+  .fix__fuentes { flex-basis: 100%; margin-left: 0; font-size: 13px; }
   .fix__largo { display: none; }
   .fix__corto { display: inline; }
   .campo--busqueda { flex-basis: 100%; }
@@ -525,6 +529,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 
 <script type="module">
 const API = '/api/datos';
+const API_MERCADO = '/api/tipo-cambio';
+/* El intradía se vuelve a pedir cada minuto y medio mientras la pestaña está visible. */
+const MERCADO_CADA_MS = 90_000;
 const RAPIDO_MS = 30_000;
 const LENTO_MS = 10 * 60_000;
 const ANTES_MS = 2 * 60_000;
@@ -614,6 +621,8 @@ const estado = {
   filtros: { pais: 'todos', mes: 'actual', estado: 'todos', texto: '' },
   mesVisible: 'todos',
   silencios: [],
+  mercado: null,
+  temporizadorMercado: null,
 };
 
 /* Utilidades */
@@ -966,30 +975,60 @@ async function cargar() {
   programar();
 }
 
-/* Barra del tipo de cambio FIX. Sube o baja respecto al FIX del día hábil anterior. */
+/* Barra del tipo de cambio: FIX de Banxico (diario) e intradía (precio de mercado al momento). */
+function htmlCambio(cambio, titulo) {
+  if (!cambio) return '';
+  const direccion = cambio.absoluto > 0 ? 'arriba' : cambio.absoluto < 0 ? 'abajo' : 'igual';
+  const flecha = { arriba: '▲', abajo: '▼', igual: '=' }[direccion];
+  return `<span class="fix__cambio" data-direccion="${direccion}" title="${escapar(titulo)}">${flecha} ` +
+    `<span class="fix__largo">${conSigno(cambio.absoluto, 4)} (${conSigno(cambio.porcentaje, 2)}%)</span>` +
+    `<span class="fix__corto">${conSigno(cambio.porcentaje, 2)}%</span></span>`;
+}
+const horaCdmxCorta = new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Mexico_City' });
 function pintarFix() {
   const barra = $('#fix');
   const f = estado.vista?.fix;
-  document.documentElement.classList.toggle('con-fix', Boolean(f));
-  if (!f) { barra.hidden = true; return; }
-  let cambio = '';
-  if (f.cambio && f.anterior) {
-    const direccion = f.cambio.absoluto > 0 ? 'arriba' : f.cambio.absoluto < 0 ? 'abajo' : 'igual';
-    const flecha = { arriba: '▲', abajo: '▼', igual: '=' }[direccion];
-    const titulo = `Cambio contra el FIX del ${fechaCorta(f.anterior.fecha)} (${formatoNumero(f.anterior.valor, 4)})`;
-    cambio = `<span class="fix__cambio" data-direccion="${direccion}" title="${escapar(titulo)}">${flecha} ` +
-      `<span class="fix__largo">${conSigno(f.cambio.absoluto, 4)} (${conSigno(f.cambio.porcentaje, 2)}%)</span>` +
-      `<span class="fix__corto">${conSigno(f.cambio.porcentaje, 2)}%</span></span>`;
+  const m = estado.mercado?.disponible ? estado.mercado : null;
+  document.documentElement.classList.toggle('con-fix', Boolean(f || m));
+  if (!f && !m) { barra.hidden = true; return; }
+  let html = '';
+  const fuentes = [];
+  if (f) {
+    const titulo = f.anterior ? `Cambio contra el FIX del ${fechaCorta(f.anterior.fecha)} (${formatoNumero(f.anterior.valor, 4)})` : '';
+    html += `<span class="fix__grupo"><span class="fix__etiqueta" title="Tipo de cambio FIX de Banxico, pesos por dólar">FIX</span>` +
+      `<strong class="fix__valor">${formatoNumero(f.valor, 4)}</strong>` +
+      `<span class="fix__fecha">· ${escapar(fechaCorta(f.fecha))}</span>${htmlCambio(f.cambio, titulo)}</span>`;
+    fuentes.push(`<a href="${escapar(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`FIX obtenido ${fechaHora.format(new Date(f.obtenido))}`)}">${escapar(f.fuente)}</a>`);
   }
-  const obtenido = fechaHora.format(new Date(f.obtenido));
-  barra.querySelector('.fix__interior').innerHTML =
-    `<span class="fix__etiqueta"><span class="fix__largo">Tipo de cambio </span>FIX</span>` +
-    `<strong class="fix__valor">${formatoNumero(f.valor, 4)}</strong>` +
-    `<span class="fix__unidad fix__largo">MXN por USD</span>` +
-    `<span class="fix__fecha">· ${escapar(fechaCorta(f.fecha))}</span>${cambio}` +
-    `<a class="fix__fuente" href="${escapar(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`Fuente: ${f.fuente}. Obtenido ${obtenido}`)}">${escapar(f.fuente)}</a>`;
+  if (m) {
+    const momento = new Date(m.hora);
+    const esHoy = hoyCdmx(momento.getTime()) === hoyCdmx();
+    const hora = esHoy ? horaCdmxCorta.format(momento) : fechaHora.format(momento);
+    const titulo = m.cierreAnterior ? `Cambio contra el cierre anterior (${formatoNumero(m.cierreAnterior, 4)})` : '';
+    html += `<span class="fix__grupo"><span class="fix__etiqueta">Intradía</span>` +
+      `<strong class="fix__valor">${formatoNumero(m.valor, 4)}</strong>` +
+      `<span class="fix__fecha" title="Hora de la cotización, centro de México">· ${escapar(hora)}${m.abierto === false ? ' (cerrado)' : ''}</span>${htmlCambio(m.cambio, titulo)}</span>`;
+    fuentes.push(`<a href="${escapar(m.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`Precio de mercado obtenido ${fechaHora.format(new Date(m.obtenido))}`)}">${escapar(m.fuente)}</a>`);
+  }
+  html += `<span class="fix__fuentes"><span class="fix__largo">MXN por USD · </span>${fuentes.join(' · ')}</span>`;
+  barra.querySelector('.fix__interior').innerHTML = html;
   barra.hidden = false;
   medirFix();
+}
+
+/* Intradía: se pide al abrir y cada minuto y medio con la pestaña visible. Si falla, se conserva el último. */
+async function cargarMercado() {
+  clearTimeout(estado.temporizadorMercado);
+  try {
+    const respuesta = await fetch(API_MERCADO, { cache: 'no-store' });
+    if (respuesta.ok) {
+      estado.mercado = await respuesta.json();
+      pintarFix();
+    }
+  } catch {
+    // Se mantiene el último valor conocido.
+  }
+  if (!document.hidden) estado.temporizadorMercado = setTimeout(cargarMercado, MERCADO_CADA_MS);
 }
 function medirFix() {
   const barra = $('#fix');
@@ -1060,8 +1099,13 @@ $('#filtro-texto').addEventListener('input', (ev) => {
 
 /* Pestaña oculta: se pausa la consulta y se actualiza al volver */
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) clearTimeout(estado.temporizador);
-  else cargar();
+  if (document.hidden) {
+    clearTimeout(estado.temporizador);
+    clearTimeout(estado.temporizadorMercado);
+  } else {
+    cargar();
+    cargarMercado();
+  }
 });
 
 /* Cada 30 s: frescura, estados por hora y etiquetas "Nuevo" */
@@ -1077,6 +1121,7 @@ if (preferencias) Object.assign(estado.filtros, preferencias, { mes: 'actual', t
 pintarFiltros();
 prepararBotonAvisos();
 cargar();
+cargarMercado();
 </script>
 </body>
 </html>

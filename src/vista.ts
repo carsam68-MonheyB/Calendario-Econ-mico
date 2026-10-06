@@ -7,6 +7,7 @@ import { aplicarConsensos, type DatosConsenso } from './consenso.ts';
 import { aplicarCorrecciones, type Correccion } from './correcciones.ts';
 import { sincronizar } from './datos.ts';
 import type { DatoFix, Fix } from './fix.ts';
+import type { Mercado } from './mercado.ts';
 import { indicadorDe } from './indicadores.ts';
 import type { Datos, EstadoServicio, EventoGuardado, ValorConFuente } from './modelo.ts';
 import { estadoVisible, publicadoDesde, ventanas, type EstadoVisible } from './programacion.ts';
@@ -163,6 +164,7 @@ export function construirEstado(entrada: {
   errorCorrecciones: string | null;
   ahora: Date;
   fix?: Fix | null;
+  mercado?: Mercado | null;
 }) {
   const { estado, config, errorCorrecciones, ahora } = entrada;
   // Solo se informa si cada llave está configurada, nunca su valor.
@@ -171,6 +173,7 @@ export function construirEstado(entrada: {
   );
   return {
     fix: entrada.fix ? { fecha: entrada.fix.actual?.fecha ?? null, obtenido: entrada.fix.obtenido, ultimoError: entrada.fix.ultimoError } : null,
+    mercado: entrada.mercado ? { hora: entrada.mercado.hora, obtenido: entrada.mercado.obtenido, ultimoError: entrada.mercado.ultimoError } : null,
     generado: ahora.toISOString(),
     modoReal: config.modoReal,
     modoConsenso: config.modoConsenso,

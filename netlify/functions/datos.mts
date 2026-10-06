@@ -21,8 +21,8 @@ export default async (req: Request) => {
 
   try {
     if (new URL(req.url).pathname === '/api/estado') {
-      const [estado, consenso, fix] = await Promise.all([almacen.leerEstado(), almacen.leerConsenso(), almacen.leerFix()]);
-      return Response.json(construirEstado({ estado, consenso, fix, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
+      const [estado, consenso, fix, mercado] = await Promise.all([almacen.leerEstado(), almacen.leerConsenso(), almacen.leerFix(), almacen.leerMercado()]);
+      return Response.json(construirEstado({ estado, consenso, fix, mercado, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
     }
 
     const [datos, consenso, fix] = await Promise.all([

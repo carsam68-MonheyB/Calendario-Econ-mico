@@ -1,9 +1,11 @@
 // Acceso a Netlify Blobs. Las funciones leen y escriben solo a través de esta interfaz.
-// Cada llave tiene un solo escritor: "datos", "estado" y "fix" la función programada; "consenso" quien busca el esperado.
+// Cada llave tiene un solo escritor: "datos", "estado" y "fix" la función programada; "consenso" quien busca el esperado;
+// "mercado" la función de tipo de cambio.
 
 import { getStore } from '@netlify/blobs';
 import type { DatosConsenso } from './consenso.ts';
 import type { Fix } from './fix.ts';
+import type { Mercado } from './mercado.ts';
 import type { Datos, EstadoServicio } from './modelo.ts';
 
 export interface Almacen {
@@ -15,6 +17,8 @@ export interface Almacen {
   guardarConsenso(consenso: DatosConsenso): Promise<void>;
   leerFix(): Promise<Fix | null>;
   guardarFix(fix: Fix): Promise<void>;
+  leerMercado(): Promise<Mercado | null>;
+  guardarMercado(mercado: Mercado): Promise<void>;
 }
 
 export const STORE = 'calendario';
@@ -40,17 +44,22 @@ export function almacenBlobs(): Almacen {
     guardarFix: async (fix) => {
       await store.setJSON('fix', fix);
     },
+    leerMercado: () => leer<Mercado>('mercado'),
+    guardarMercado: async (mercado) => {
+      await store.setJSON('mercado', mercado);
+    },
   };
 }
 
 /** Almacén en memoria para pruebas. Cuenta las lecturas y escrituras. */
-export function almacenMemoria(inicial: { datos?: Datos; estado?: EstadoServicio; consenso?: DatosConsenso; fix?: Fix } = {}) {
+export function almacenMemoria(inicial: { datos?: Datos; estado?: EstadoServicio; consenso?: DatosConsenso; fix?: Fix; mercado?: Mercado } = {}) {
   const copia = <T>(x: T | undefined | null): T | null => (x ? structuredClone(x) : null);
   let datos = copia(inicial.datos);
   let estado = copia(inicial.estado);
   let consenso = copia(inicial.consenso);
   let fix = copia(inicial.fix);
-  const conteo = { lecturas: 0, escriturasDatos: 0, escriturasEstado: 0, escriturasConsenso: 0, escriturasFix: 0 };
+  let mercado = copia(inicial.mercado);
+  const conteo = { lecturas: 0, escriturasDatos: 0, escriturasEstado: 0, escriturasConsenso: 0, escriturasFix: 0, escriturasMercado: 0 };
   const almacen: Almacen = {
     leerDatos: async () => (conteo.lecturas++, copia(datos)),
     guardarDatos: async (d) => {
@@ -72,6 +81,11 @@ export function almacenMemoria(inicial: { datos?: Datos; estado?: EstadoServicio
       conteo.escriturasFix++;
       fix = structuredClone(f);
     },
+    leerMercado: async () => (conteo.lecturas++, copia(mercado)),
+    guardarMercado: async (m) => {
+      conteo.escriturasMercado++;
+      mercado = structuredClone(m);
+    },
   };
-  return { almacen, conteo, actual: () => ({ datos, estado, consenso, fix }) };
+  return { almacen, conteo, actual: () => ({ datos, estado, consenso, fix, mercado }) };
 }
