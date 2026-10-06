@@ -20,7 +20,7 @@ export const ESPERA_TRAS_ERROR_MS = 60_000;
 export interface Mercado {
   version: 1;
   valor: number | null;
-  /** Hora de la cotización según el proveedor (ISO, UTC). */
+  /** Hora en que se consultó el mercado (ISO, UTC). El proveedor fecha la cotización con su vela diaria, no con el momento. */
   hora: string | null;
   cierreAnterior: number | null;
   cambio: { absoluto: number; porcentaje: number } | null;
@@ -108,7 +108,7 @@ export async function obtenerMercado(config: Configuracion, almacen: Almacen, ah
     const nuevo: Mercado = {
       ...guardado,
       valor: c.valor,
-      hora: c.hora ?? intento,
+      hora: intento,
       cierreAnterior: c.cierreAnterior,
       cambio: c.cambio,
       abierto: c.abierto,

@@ -1007,7 +1007,7 @@ function pintarFix() {
     const titulo = m.cierreAnterior ? `Cambio contra el cierre anterior (${formatoNumero(m.cierreAnterior, 4)})` : '';
     html += `<span class="fix__grupo"><span class="fix__etiqueta">Intradía</span>` +
       `<strong class="fix__valor">${formatoNumero(m.valor, 4)}</strong>` +
-      `<span class="fix__fecha" title="Hora de la cotización, centro de México">· ${escapar(hora)}${m.abierto === false ? ' (cerrado)' : ''}</span>${htmlCambio(m.cambio, titulo)}</span>`;
+      `<span class="fix__fecha" title="Hora de la consulta al mercado, centro de México">· ${escapar(hora)}${m.abierto === false ? ' (cerrado)' : ''}</span>${htmlCambio(m.cambio, titulo)}</span>`;
     fuentes.push(`<a href="${escapar(m.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`Precio de mercado obtenido ${fechaHora.format(new Date(m.obtenido))}`)}">${escapar(m.fuente)}</a>`);
   }
   html += `<span class="fix__fuentes"><span class="fix__largo">MXN por USD · </span>${fuentes.join(' · ')}</span>`;
