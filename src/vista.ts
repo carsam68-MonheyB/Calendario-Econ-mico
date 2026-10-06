@@ -6,6 +6,8 @@ import { VARIABLES_DE_LLAVES, type Configuracion, type Llaves } from './config.t
 import { aplicarConsensos, type DatosConsenso } from './consenso.ts';
 import { aplicarCorrecciones, type Correccion } from './correcciones.ts';
 import { sincronizar } from './datos.ts';
+import type { DatoFix, Fix } from './fix.ts';
+import type { Mercado } from './mercado.ts';
 import { indicadorDe } from './indicadores.ts';
 import type { Datos, EstadoServicio, EventoGuardado, ValorConFuente } from './modelo.ts';
 import { estadoVisible, publicadoDesde, ventanas, type EstadoVisible } from './programacion.ts';
@@ -48,12 +50,38 @@ export interface EventoVista {
   publicadoDesde: string;
 }
 
+export interface FixVista {
+  /** Pesos por dólar, 4 decimales como lo publica Banxico. */
+  valor: number;
+  fecha: string;
+  anterior: DatoFix | null;
+  cambio: { absoluto: number; porcentaje: number } | null;
+  fuente: string;
+  url: string;
+  obtenido: string;
+}
+
 export interface Vista {
   generado: string;
   actualizado: string | null;
   modoReal: Configuracion['modoReal'];
   modoConsenso: Configuracion['modoConsenso'];
+  /** Tipo de cambio FIX para la barra superior; null mientras no se haya obtenido. */
+  fix: FixVista | null;
   eventos: EventoVista[];
+}
+
+export function vistaFix(fix: Fix | null | undefined): FixVista | null {
+  if (!fix?.actual || !fix.obtenido) return null;
+  const { actual, anterior } = fix;
+  const cambio =
+    anterior && anterior.valor !== 0
+      ? {
+          absoluto: Number((actual.valor - anterior.valor).toFixed(4)),
+          porcentaje: Number((((actual.valor - anterior.valor) / anterior.valor) * 100).toFixed(2)),
+        }
+      : null;
+  return { valor: actual.valor, fecha: actual.fecha, anterior, cambio, fuente: fix.fuente, url: fix.url, obtenido: fix.obtenido };
 }
 
 function fuente(v: ValorConFuente | null): FuenteVista | null {
@@ -76,6 +104,7 @@ export function construirVista(entrada: {
   config: Configuracion;
   esConsultable: (fila: FilaCalendario | EventoGuardado) => boolean;
   ahora: Date;
+  fix?: Fix | null;
 }): Vista {
   const { calendario, correcciones, config, esConsultable, ahora } = entrada;
   const datos = sincronizar(calendario, entrada.datos, ahora);
@@ -123,6 +152,7 @@ export function construirVista(entrada: {
     actualizado: entrada.datos?.actualizado ?? null,
     modoReal: config.modoReal,
     modoConsenso: config.modoConsenso,
+    fix: vistaFix(entrada.fix),
     eventos,
   };
 }
@@ -133,6 +163,8 @@ export function construirEstado(entrada: {
   config: Configuracion;
   errorCorrecciones: string | null;
   ahora: Date;
+  fix?: Fix | null;
+  mercado?: Mercado | null;
 }) {
   const { estado, config, errorCorrecciones, ahora } = entrada;
   // Solo se informa si cada llave está configurada, nunca su valor.
@@ -140,6 +172,8 @@ export function construirEstado(entrada: {
     (Object.keys(VARIABLES_DE_LLAVES) as (keyof Llaves)[]).map((k) => [VARIABLES_DE_LLAVES[k], Boolean(config.llaves[k])]),
   );
   return {
+    fix: entrada.fix ? { fecha: entrada.fix.actual?.fecha ?? null, obtenido: entrada.fix.obtenido, ultimoError: entrada.fix.ultimoError } : null,
+    mercado: entrada.mercado ? { hora: entrada.mercado.hora, obtenido: entrada.mercado.obtenido, ultimoError: entrada.mercado.ultimoError } : null,
     generado: ahora.toISOString(),
     modoReal: config.modoReal,
     modoConsenso: config.modoConsenso,

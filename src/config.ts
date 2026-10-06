@@ -12,6 +12,7 @@ export interface Llaves {
   banxico?: string;
   tradingeconomics?: string;
   anthropic?: string;
+  twelvedata?: string;
 }
 
 export interface Configuracion {
@@ -30,6 +31,7 @@ export const VARIABLES_DE_LLAVES: Record<keyof Llaves, string> = {
   banxico: 'BANXICO_TOKEN',
   tradingeconomics: 'TE_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
+  twelvedata: 'TWELVEDATA_API_KEY',
 };
 
 function texto(valor: string | undefined): string | undefined {

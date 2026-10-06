@@ -158,6 +158,40 @@ a { color: var(--acento); }
 .boton[aria-pressed="true"] { background: var(--acento-suave); border-color: var(--acento); color: var(--tinta); }
 
 /* Filtros */
+.fix {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 6;
+  background: var(--acento-suave);
+  border-bottom: 1px solid var(--linea);
+}
+.fix[hidden] { display: none; }
+.fix__interior {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  min-height: 72px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 28px;
+  font-size: 28px;
+  line-height: 1.2;
+}
+/* Cada grupo (FIX, intradía) se acomoda como unidad y solo se parte si no cabe. */
+.fix__grupo { display: inline-flex; flex-wrap: nowrap; align-items: baseline; gap: 2px 12px; }
+.fix__grupo > * { white-space: nowrap; }
+.fix__etiqueta { font-weight: 600; letter-spacing: 0.02em; }
+.fix__valor { font-weight: 700; font-size: 32px; font-variant-numeric: tabular-nums; }
+.fix__unidad, .fix__fecha { color: var(--tinta-2); }
+.fix__cambio { font-variant-numeric: tabular-nums; color: var(--neutral); }
+.fix__cambio[data-direccion="abajo"] { color: var(--favorable); }
+.fix__cambio[data-direccion="arriba"] { color: var(--desfavorable); }
+.fix__fuentes { margin-left: auto; color: var(--tinta-2); font-size: 24px; white-space: nowrap; }
+.fix__fuentes a { color: inherit; }
+.fix__corto { display: none; }
+/* Los filtros fijos se acomodan debajo de la barra; su alto se mide en pintarFix. */
+.con-fix .filtros { top: calc(env(safe-area-inset-top, 0px) + var(--alto-fix, 73px)); }
 .filtros {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
@@ -389,6 +423,12 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
   /* En celular los filtros no se quedan fijos: el espacio vertical es para los datos. */
   .filtros { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .filtros__interior { gap: 8px; padding: 10px 16px; }
+  .fix__interior { gap: 2px 12px; font-size: 20px; min-height: 64px; padding: 8px 16px; }
+  .fix__grupo { flex-basis: 100%; flex-wrap: wrap; gap: 2px 8px; }
+  .fix__valor { font-size: 23px; }
+  .fix__fuentes { flex-basis: 100%; margin-left: 0; font-size: 13px; }
+  .fix__largo { display: none; }
+  .fix__corto { display: inline; }
   .campo--busqueda { flex-basis: 100%; }
   .semana { margin-top: 22px; }
   .tabla, .tabla tbody, .tabla tr, .tabla td { display: block; }
@@ -437,10 +477,13 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 </style>
 </head>
 <body>
+<div class="fix" id="fix" hidden aria-label="Tipo de cambio FIX de Banxico, pesos por dólar">
+  <div class="fix__interior" role="status"></div>
+</div>
 <header class="cabecera">
   <div>
     <h1>Calendario económico</h1>
-    <p class="cabecera__sub">México y EUA · 30 sep a 31 dic 2026 · Horas del centro de México</p>
+    <p class="cabecera__sub" id="subtitulo">México y EUA · Horas del centro de México</p>
   </div>
   <div class="cabecera__estado">
     <p id="frescura" class="frescura" data-tono="cargando" role="status">Cargando…</p>
@@ -458,9 +501,6 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
     <label class="campo">Mes
       <select id="filtro-mes">
         <option value="todos">Todos</option>
-        <option value="10">Octubre</option>
-        <option value="11">Noviembre</option>
-        <option value="12">Diciembre</option>
       </select>
     </label>
     <div class="segmentos" role="group" aria-label="Estado">
@@ -489,6 +529,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 8px 16px 48px; }
 
 <script type="module">
 const API = '/api/datos';
+const API_MERCADO = '/api/tipo-cambio';
+/* El intradía se vuelve a pedir cada minuto y medio mientras la pestaña está visible. */
+const MERCADO_CADA_MS = 90_000;
 const RAPIDO_MS = 30_000;
 const LENTO_MS = 10 * 60_000;
 const ANTES_MS = 2 * 60_000;
@@ -509,11 +552,29 @@ const FERIADOS = [
   { fecha: '2026-11-26', pais: 'US', nombre: 'Día de Acción de Gracias' },
   { fecha: '2026-12-25', pais: 'MX', nombre: 'Navidad' },
   { fecha: '2026-12-25', pais: 'US', nombre: 'Navidad' },
+  { fecha: '2027-01-01', pais: 'MX', nombre: 'Año Nuevo' },
+  { fecha: '2027-01-01', pais: 'US', nombre: 'Año Nuevo' },
+  { fecha: '2027-01-18', pais: 'US', nombre: 'Día de Martin Luther King Jr.' },
+  { fecha: '2027-02-01', pais: 'MX', nombre: 'Día de la Constitución' },
+  { fecha: '2027-02-15', pais: 'US', nombre: 'Día de los Presidentes' },
+  { fecha: '2027-03-15', pais: 'MX', nombre: 'Natalicio de Benito Juárez' },
+  { fecha: '2027-05-01', pais: 'MX', nombre: 'Día del Trabajo' },
+  { fecha: '2027-05-31', pais: 'US', nombre: 'Memorial Day' },
+  { fecha: '2027-06-18', pais: 'US', nombre: 'Juneteenth (observado)' },
 ];
-const SILENCIO_FED = [
-  { desde: '2026-10-17', hasta: '2026-10-29', texto: 'Periodo de silencio de la Fed: del 17 al 29 de octubre' },
-  { desde: '2026-11-28', hasta: '2026-12-10', texto: 'Periodo de silencio de la Fed: del 28 de noviembre al 10 de diciembre' },
-];
+// Periodo de silencio de la Fed: del segundo sábado anterior a la reunión al jueves siguiente.
+// Se calcula a partir de las decisiones del calendario (reuniones de martes y miércoles).
+function silenciosFed(eventos) {
+  return eventos
+    .filter((e) => e.pais === 'US' && e.indicador.startsWith('Decisión de la Fed'))
+    .map((e) => {
+      const desde = sumarDias(e.fecha, -11);
+      const hasta = sumarDias(e.fecha, 1);
+      const a = partesFecha(desde), b = partesFecha(hasta);
+      const rango = a.m === b.m ? `del ${a.d} al ${b.d} de ${MESES_LARGOS[b.m - 1]}` : `del ${a.d} de ${MESES_LARGOS[a.m - 1]} al ${b.d} de ${MESES_LARGOS[b.m - 1]}`;
+      return { desde, hasta, texto: `Periodo de silencio de la Fed: ${rango}` };
+    });
+}
 
 // Unidad: sufijo pegado al número y nota pequeña a la derecha.
 const UNIDADES = {
@@ -556,7 +617,12 @@ const estado = {
   temporizador: null,
   primeraCarga: true,
   firma: '',
-  filtros: { pais: 'todos', mes: 'todos', estado: 'todos', texto: '' },
+  // 'actual' = el mes en curso; se resuelve en cada render para seguir al calendario.
+  filtros: { pais: 'todos', mes: 'actual', estado: 'todos', texto: '' },
+  mesVisible: 'todos',
+  silencios: [],
+  mercado: null,
+  temporizadorMercado: null,
 };
 
 /* Utilidades */
@@ -564,7 +630,7 @@ const $ = (s) => document.querySelector(s);
 const escapar = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const normalizar = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const leerPreferencias = () => { try { return JSON.parse(localStorage.getItem('calendario:filtros') ?? 'null'); } catch { return null; } };
-const guardarPreferencias = () => { try { localStorage.setItem('calendario:filtros', JSON.stringify({ ...estado.filtros, texto: '' })); } catch {} };
+const guardarPreferencias = () => { try { localStorage.setItem('calendario:filtros', JSON.stringify({ ...estado.filtros, mes: 'actual', texto: '' })); } catch {} };
 const leerResaltados = () => { try { return new Set(JSON.parse(localStorage.getItem('calendario:resaltados') ?? '[]')); } catch { return new Set(); } };
 const guardarResaltados = (s) => { try { localStorage.setItem('calendario:resaltados', JSON.stringify([...s].slice(-200))); } catch {} };
 
@@ -584,6 +650,27 @@ function fechaCorta(fecha) { const { m, d } = partesFecha(fecha); return `${DIAS
 function horaCorta(hora) { if (!hora) return '—'; const [h, mi] = hora.split(':'); return `${Number(h)}:${mi}`; }
 function hoyCdmx(ahora = Date.now()) { return new Date(ahora - DESFASE_CDMX_MS).toISOString().slice(0, 10); }
 function lunesDe(fecha) { return sumarDias(fecha, -((diaSemana(fecha) + 6) % 7)); }
+function fechaLarga(fecha) { const { a, m, d } = partesFecha(fecha); return `${d} ${MESES[m - 1]} ${a}`; }
+function etiquetaMes(ym) { const [a, m] = ym.split('-').map(Number); const nombre = MESES_LARGOS[m - 1]; return `${nombre[0].toUpperCase()}${nombre.slice(1)} ${a}`; }
+function mesesDelCalendario(vista) { return [...new Set((vista?.eventos ?? []).map((e) => e.fecha.slice(0, 7)))].sort(); }
+/* El filtro "mes en curso" se convierte en el mes de hoy si el calendario lo tiene; si no, en "Todos". */
+function resolverMes(vista, hoy) {
+  const mes = estado.filtros.mes;
+  if (mes !== 'actual') return mes;
+  return mesesDelCalendario(vista).includes(hoy.slice(0, 7)) ? hoy.slice(0, 7) : 'todos';
+}
+function llenarMeses(vista) {
+  const select = $('#filtro-mes');
+  const meses = mesesDelCalendario(vista);
+  const actuales = [...select.options].slice(1).map((o) => o.value);
+  if (actuales.join() === meses.join()) return;
+  select.replaceChildren(new Option('Todos', 'todos'), ...meses.map((ym) => new Option(etiquetaMes(ym), ym)));
+}
+function pintarSubtitulo(vista) {
+  const fechas = (vista?.eventos ?? []).map((e) => e.fecha).sort();
+  const rango = fechas.length ? ` · ${fechaLarga(fechas[0])} a ${fechaLarga(fechas.at(-1))}` : '';
+  $('#subtitulo').textContent = `México y EUA${rango} · Horas del centro de México`;
+}
 function etiquetaSemana(lunes) {
   const viernes = sumarDias(lunes, 4);
   const a = partesFecha(lunes), b = partesFecha(viernes);
@@ -650,7 +737,7 @@ function htmlVariacion(e) {
 function pasaFiltros(e, est) {
   const f = estado.filtros;
   if (f.pais !== 'todos' && e.pais !== f.pais) return false;
-  if (f.mes !== 'todos' && Number(e.fecha.slice(5, 7)) !== Number(f.mes)) return false;
+  if (estado.mesVisible !== 'todos' && e.fecha.slice(0, 7) !== estado.mesVisible) return false;
   if (f.estado === 'publicados' && est !== 'publicado') return false;
   if (f.estado === 'pendientes' && est === 'publicado') return false;
   if (f.texto && !normalizar(e.indicador).includes(normalizar(f.texto))) return false;
@@ -659,7 +746,7 @@ function pasaFiltros(e, est) {
 function feriadosVisibles(fecha) {
   const f = estado.filtros;
   if (f.estado !== 'todos' || f.texto) return [];
-  if (f.mes !== 'todos' && Number(fecha.slice(5, 7)) !== Number(f.mes)) return [];
+  if (estado.mesVisible !== 'todos' && fecha.slice(0, 7) !== estado.mesVisible) return [];
   return FERIADOS.filter((h) => h.fecha === fecha && (f.pais === 'todos' || f.pais === h.pais));
 }
 
@@ -669,6 +756,9 @@ function render({ desplazar = false } = {}) {
   if (!vista) return;
   const ahora = Date.now();
   const hoy = hoyCdmx(ahora);
+  llenarMeses(vista);
+  estado.mesVisible = resolverMes(vista, hoy);
+  pintarFiltros();
   const popover = $('#popover');
   if (popover.matches(':popover-open')) popover.hidePopover();
   const foco = document.activeElement?.closest('[data-info]');
@@ -701,7 +791,7 @@ function render({ desplazar = false } = {}) {
   for (const lunes of [...semanas.keys()].sort()) {
     const domingo = sumarDias(lunes, 6);
     const idSemana = `semana-${lunes}`;
-    const notas = (estado.filtros.pais === 'MX' ? [] : SILENCIO_FED)
+    const notas = (estado.filtros.pais === 'MX' ? [] : estado.silencios)
       .filter((s) => s.desde <= domingo && s.hasta >= lunes)
       .map((s) => `<p class="nota-semana">${escapar(s.texto)}</p>`).join('');
     html += `<section class="semana" aria-labelledby="${idSemana}"><div class="semana__cabecera"><h2 id="${idSemana}">${etiquetaSemana(lunes)}</h2>${notas}</div>`;
@@ -860,11 +950,14 @@ async function cargar() {
       const previos = new Map((estado.vista?.eventos ?? []).map((e) => [e.id, e]));
       const nuevos = estado.vista ? vista.eventos.filter((e) => e.real !== null && previos.get(e.id)?.real === null) : [];
       estado.vista = vista;
+      estado.silencios = silenciosFed(vista.eventos);
+      pintarSubtitulo(vista);
       estado.etag = respuesta.headers.get('ETag');
       estado.ultimoExito = Date.now();
       estado.error = false;
       for (const e of nuevos) { resaltados.delete(e.id); pendientesDeResaltar.add(e.id); }
       pintarPie();
+      pintarFix();
       render({ desplazar: estado.primeraCarga });
       estado.firma = firma(Date.now());
       estado.primeraCarga = false;
@@ -881,6 +974,67 @@ async function cargar() {
   pintarFrescura();
   programar();
 }
+
+/* Barra del tipo de cambio: FIX de Banxico (diario) e intradía (precio de mercado al momento). */
+function htmlCambio(cambio, titulo) {
+  if (!cambio) return '';
+  const direccion = cambio.absoluto > 0 ? 'arriba' : cambio.absoluto < 0 ? 'abajo' : 'igual';
+  const flecha = { arriba: '▲', abajo: '▼', igual: '=' }[direccion];
+  return `<span class="fix__cambio" data-direccion="${direccion}" title="${escapar(titulo)}">${flecha} ` +
+    `<span class="fix__largo">${conSigno(cambio.absoluto, 4)} (${conSigno(cambio.porcentaje, 2)}%)</span>` +
+    `<span class="fix__corto">${conSigno(cambio.porcentaje, 2)}%</span></span>`;
+}
+const horaCdmxCorta = new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Mexico_City' });
+function pintarFix() {
+  const barra = $('#fix');
+  const f = estado.vista?.fix;
+  const m = estado.mercado?.disponible ? estado.mercado : null;
+  document.documentElement.classList.toggle('con-fix', Boolean(f || m));
+  if (!f && !m) { barra.hidden = true; return; }
+  let html = '';
+  const fuentes = [];
+  if (f) {
+    const titulo = f.anterior ? `Cambio contra el FIX del ${fechaCorta(f.anterior.fecha)} (${formatoNumero(f.anterior.valor, 4)})` : '';
+    html += `<span class="fix__grupo"><span class="fix__etiqueta" title="Tipo de cambio FIX de Banxico, pesos por dólar">FIX</span>` +
+      `<strong class="fix__valor">${formatoNumero(f.valor, 4)}</strong>` +
+      `<span class="fix__fecha">· ${escapar(fechaCorta(f.fecha))}</span>${htmlCambio(f.cambio, titulo)}</span>`;
+    fuentes.push(`<a href="${escapar(f.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`FIX obtenido ${fechaHora.format(new Date(f.obtenido))}`)}">${escapar(f.fuente)}</a>`);
+  }
+  if (m) {
+    const momento = new Date(m.hora);
+    const esHoy = hoyCdmx(momento.getTime()) === hoyCdmx();
+    const hora = esHoy ? horaCdmxCorta.format(momento) : fechaHora.format(momento);
+    const titulo = m.cierreAnterior ? `Cambio contra el cierre anterior (${formatoNumero(m.cierreAnterior, 4)})` : '';
+    html += `<span class="fix__grupo"><span class="fix__etiqueta">Intradía</span>` +
+      `<strong class="fix__valor">${formatoNumero(m.valor, 4)}</strong>` +
+      `<span class="fix__fecha" title="Hora de la cotización, centro de México">· ${escapar(hora)}${m.abierto === false ? ' (cerrado)' : ''}</span>${htmlCambio(m.cambio, titulo)}</span>`;
+    fuentes.push(`<a href="${escapar(m.url)}" target="_blank" rel="noopener noreferrer" title="${escapar(`Precio de mercado obtenido ${fechaHora.format(new Date(m.obtenido))}`)}">${escapar(m.fuente)}</a>`);
+  }
+  html += `<span class="fix__fuentes"><span class="fix__largo">MXN por USD · </span>${fuentes.join(' · ')}</span>`;
+  barra.querySelector('.fix__interior').innerHTML = html;
+  barra.hidden = false;
+  medirFix();
+}
+
+/* Intradía: se pide al abrir y cada minuto y medio con la pestaña visible. Si falla, se conserva el último. */
+async function cargarMercado() {
+  clearTimeout(estado.temporizadorMercado);
+  try {
+    const respuesta = await fetch(API_MERCADO, { cache: 'no-store' });
+    if (respuesta.ok) {
+      estado.mercado = await respuesta.json();
+      pintarFix();
+    }
+  } catch {
+    // Se mantiene el último valor conocido.
+  }
+  if (!document.hidden) estado.temporizadorMercado = setTimeout(cargarMercado, MERCADO_CADA_MS);
+}
+function medirFix() {
+  const barra = $('#fix');
+  document.documentElement.style.setProperty('--alto-fix', `${barra.hidden ? 0 : barra.offsetHeight}px`);
+}
+addEventListener('resize', medirFix);
 
 function pintarPie() {
   const v = estado.vista;
@@ -926,7 +1080,7 @@ function pintarFiltros() {
   for (const b of document.querySelectorAll('[data-filtro]')) {
     b.setAttribute('aria-pressed', String(estado.filtros[b.dataset.filtro] === b.dataset.valor));
   }
-  $('#filtro-mes').value = estado.filtros.mes;
+  $('#filtro-mes').value = estado.mesVisible;
 }
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-filtro]');
@@ -945,8 +1099,13 @@ $('#filtro-texto').addEventListener('input', (ev) => {
 
 /* Pestaña oculta: se pausa la consulta y se actualiza al volver */
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) clearTimeout(estado.temporizador);
-  else cargar();
+  if (document.hidden) {
+    clearTimeout(estado.temporizador);
+    clearTimeout(estado.temporizadorMercado);
+  } else {
+    cargar();
+    cargarMercado();
+  }
 });
 
 /* Cada 30 s: frescura, estados por hora y etiquetas "Nuevo" */
@@ -958,10 +1117,11 @@ setInterval(() => {
 }, 30_000);
 
 const preferencias = leerPreferencias();
-if (preferencias) Object.assign(estado.filtros, preferencias, { texto: '' });
+if (preferencias) Object.assign(estado.filtros, preferencias, { mes: 'actual', texto: '' });
 pintarFiltros();
 prepararBotonAvisos();
 cargar();
+cargarMercado();
 </script>
 </body>
 </html>

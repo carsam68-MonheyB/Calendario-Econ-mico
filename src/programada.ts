@@ -13,6 +13,7 @@ import {
   registrarIntento,
   tocaRevisarConsenso,
 } from './consenso.ts';
+import { revisarFix } from './fix.ts';
 import { tieneFuente } from './fuentes.ts';
 import { buscarEventoTe, consultarCalendarioTe, urlTe, valorTe } from './organismos/te.ts';
 import { ventanas } from './programacion.ts';
@@ -103,11 +104,12 @@ export async function correrProgramada(nombre: string, crearConsultor: (config: 
     esConsultable: (fila) => tieneFuente(fila, config.modoReal),
   });
   const consensos = await revisarConsenso(config, calendario, almacen, ahora);
+  const fix = await revisarFix(config, almacen, ahora);
   // Una línea por corrida en los logs de Netlify. Nunca incluye llaves.
-  if (resumen.motivo !== 'sin ventana activa' || consensos > 0) {
+  if (resumen.motivo !== 'sin ventana activa' || consensos > 0 || fix !== 'omitido') {
     console.log(
       `[${nombre}] ${resumen.motivo}: consultados=${resumen.consultados.length} nuevos=${resumen.nuevos.join(',') || '-'} ` +
-        `revisados=${resumen.revisados.join(',') || '-'} anteriores=${resumen.anteriores.length} escribio=${resumen.escribioDatos} consensos=${consensos} ${Date.now() - inicio} ms`,
+        `revisados=${resumen.revisados.join(',') || '-'} anteriores=${resumen.anteriores.length} escribio=${resumen.escribioDatos} consensos=${consensos} fix=${fix} ${Date.now() - inicio} ms`,
     );
   }
   return resumen;

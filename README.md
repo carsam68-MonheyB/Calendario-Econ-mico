@@ -13,9 +13,10 @@ La interfaz va en español y los números en formato es-MX. Las horas son del ce
 | `netlify/functions/actualizar-cada-15.mts` | Función programada cada 15 minutos el resto del día y los fines de semana. Netlify admite un solo horario por función, por eso son dos archivos. |
 | `netlify/functions/consenso-background.mts` | Background Function (hasta 15 minutos) que busca el consenso con Claude. |
 | `netlify/functions/datos.mts` | `GET /api/datos` y `GET /api/estado`, con `Cache-Control: no-store`. |
+| `netlify/functions/tipo-cambio.mts` | `GET /api/tipo-cambio`: el precio de mercado USD/MXN al momento, desde un caché de 2 minutos en Blobs. |
 | `src/fuentes.ts` | Mapeo indicador → fuente y serie, y el cálculo de cada dato. |
 | `src/calculos.ts` | Variación contra lo esperado, puntos porcentuales, puntos base y redondeo. |
-| `data/calendario.csv` | Las 91 filas del calendario. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
+| `data/calendario.csv` | El calendario: las 91 filas de la especificación (30 sep a 30 dic 2026) más las fechas de 2027 ya publicadas. Viaja dentro de cada función y se carga en Blobs la primera vez. Admite una columna opcional `anterior` al final. |
 | `data/correcciones.json` | Correcciones manuales de respaldo. |
 
 Netlify Blobs guarda todo en el store `calendario`:
@@ -23,6 +24,8 @@ Netlify Blobs guarda todo en el store `calendario`:
 - `datos`: el calendario con anterior, esperado, real, estado, fuente y hora de actualización.
 - `estado`: por fuente, el último intento, la última respuesta correcta y el último error.
 - `consenso`: el esperado que se buscó y sus intentos.
+- `fix`: el tipo de cambio FIX más reciente y el del día hábil anterior.
+- `mercado`: la última cotización intradía USD/MXN y la hora en que se obtuvo.
 
 Los datos nunca se guardan en el repositorio. Que llegue un dato no genera commits ni deploys. Si cambias el CSV, en el siguiente deploy se actualizan fechas, horas y nombres sin perder los datos ya obtenidos.
 
@@ -45,6 +48,7 @@ Además, a las 5:00, 20:00, 21:00 y 22:00 del centro la corrida completa el dato
 ### La página
 
 - Si hay un evento entre 2 minutos antes y 30 minutos después de su hora, vuelve a pedir datos cada 30 segundos; si no, cada 10 minutos. Se pausa con la pestaña oculta y actualiza al volver. Usa `If-None-Match`, así que una respuesta sin cambios no trae cuerpo.
+- Abre en el mes en curso; el filtro **Mes** permite ver los meses anteriores y los siguientes, o **Todos**. El subtítulo muestra el rango de fechas que hay en el calendario.
 - Columnas por fila: **Anterior** (el último dato vigente del indicador, el del periodo previo), **Esperado**, **Real** y **Variación**. Al tocar un valor se ve su fuente y la hora en que se obtuvo.
 - Estados por fila: "Pendiente", "Esperando dato", "Publicado" y "Retrasado". ISM, IMEF y ADP muestran "Sin fuente automática" en modo oficial.
 - Un dato nuevo resalta su fila una sola vez y muestra "Nuevo" durante 10 minutos. Con permiso del navegador, avisa con una notificación como "EUA, CPI general anual sep: 3.1% vs 3.0% esperado (+3.3%)".
@@ -116,6 +120,35 @@ Toma del calendario de Trading Economics el campo `Actual` como dato real. Cubre
 
 Los nombres de los eventos de TE no se pudieron comprobar sin una llave de pago. Si alguno no coincide, el evento se queda sin dato y `/api/estado` lo informa; se corrige editando `NOMBRES_TE`.
 
+## Tipo de cambio: FIX e intradía
+
+La barra fija de arriba muestra dos cifras en pesos por dólar, con 4 decimales:
+
+### FIX
+
+El **tipo de cambio FIX** de Banxico, la tasa de referencia oficial, con la fecha a la que corresponde y el cambio contra el FIX del día hábil anterior. Toca "Banxico" para ir a la página oficial.
+
+- Fuente: serie `SF43718` del SIE de Banxico, con el mismo token `BANXICO_TOKEN`.
+- Cuándo: Banxico determina el FIX a las 12:00. En días hábiles, de 12:00 a 20:00 del centro, la corrida pregunta cada 30 minutos hasta obtener el del día; mientras tanto se muestra el anterior con su fecha. La primera vez se obtiene en la siguiente corrida de múltiplo de 15 minutos.
+- Costo: una consulta de unos cuantos KB al día dentro de la corrida que ya existe; Blobs se escribe solo cuando el valor cambia.
+- Es un dato diario. `/api/estado` muestra la fecha del FIX guardado y el último error, si lo hubo.
+
+### Intradía
+
+El **precio de mercado USD/MXN al momento**, con la hora de la cotización (centro de México) y el cambio contra el cierre anterior. Solo aparece si está configurada la llave `TWELVEDATA_API_KEY`; sin ella la barra muestra únicamente el FIX.
+
+- Fuente: [Twelve Data](https://twelvedata.com/), cotización `USD/MXN` (`/quote`). El plan gratuito ("Basic") alcanza: tiene un límite diario de consultas y aquí se hace como mucho una cada 2 minutos.
+- Cómo: la página pide `GET /api/tipo-cambio` al abrirse y cada minuto y medio mientras la pestaña está visible. La función responde desde un caché en Blobs y solo consulta al proveedor si el caché tiene más de 2 minutos (30 con el mercado cerrado). Netlify además sirve la misma respuesta a todos los visitantes durante un minuto, así que ni los visitantes ni las pestañas abiertas multiplican las llamadas.
+- Si el proveedor falla, se sigue mostrando el último precio y `/api/estado` indica el error. La llave viaja en el encabezado `Authorization`, nunca en la URL.
+- Costo: unas 2 créditos al mes por cada visitante que tenga la página abierta todo el día (peticiones web a 2 créditos por 10,000).
+
+Para obtener la llave:
+
+1. Entra a https://twelvedata.com y toca **Get free API key** (o **Sign up**). Crea la cuenta con tu correo; el plan **Basic** es gratuito y no pide tarjeta.
+2. En el panel, abre **API keys** y copia la llave.
+3. En Netlify: **Project configuration → Environment variables → Add a variable**. Key: `TWELVEDATA_API_KEY`, Value: la llave, marca **Contains secret values** y guarda.
+4. Como con todas las variables, hay que volver a hacer deploy para que las funciones la tomen.
+
 ## Fuente del esperado
 
 Se elige con `FUENTE_CONSENSO`: `ninguna` (por omisión), `claude` o `tradingeconomics`. Cada esperado guarda de dónde vino; en la página, el ícono de información junto al valor muestra la fuente.
@@ -147,6 +180,7 @@ Lo capturado en el CSV o en `data/correcciones.json` siempre manda sobre el cons
 | `ANTHROPIC_API_KEY` | Llave de la API de Anthropic | `FUENTE_CONSENSO=claude` |
 | `CLAUDE_MODELO` | Otro modelo de Claude | Opcional |
 | `TE_API_KEY` | Llave de Trading Economics | Cualquier modo `tradingeconomics` |
+| `TWELVEDATA_API_KEY` | Llave de Twelve Data | Opcional; activa el precio intradía en la barra |
 
 Las llaves nunca aparecen en el código, en Blobs, en `/api/datos`, en `/api/estado` ni en la página. `/api/estado` solo dice si cada una está configurada. Los mensajes de error se limpian antes de guardarse.
 
@@ -239,6 +273,25 @@ Los equipos creados desde el 28 de julio de 2026 crean proyectos privados: solo 
 2. Abre **Credit usage breakdown** para ver cómputo, peticiones, ancho de banda y deploys a producción.
 3. **Account usage insights** muestra los créditos por día.
 
+## Mantenimiento del calendario
+
+Las fechas salen de los calendarios oficiales que cada institución publica por año (INEGI, por semestre). Para que el calendario siga, hay que agregar las filas del periodo siguiente al CSV y hacer un deploy (15 créditos). Pasos:
+
+1. Descarga los calendarios oficiales: INEGI (`Calendario (pdf)` en la sala de prensa), BLS (`Schedule of releases`), BEA (`Release schedule`), Census (`Economic Indicator Calendar`), Fed (`FOMC meeting calendars`), Banxico (`Calendario de decisiones de política monetaria`), SHCP, IMEF, ISM y ADP.
+2. Agrega una fila por publicación con el mismo nombre de indicador que ya usa el CSV, el `periodo` de referencia y la hora del centro de México. Las decisiones y minutas de la Fed se publican a las 14:00 hora del este: 13:00 del centro en horario de invierno y 12:00 en horario de verano de EUA. Las minutas salen tres semanas después de cada decisión.
+3. Si un indicador es nuevo, agrégalo a `src/indicadores.ts` y a `src/fuentes.ts`.
+4. Corre `npm test` (ajusta el conteo de filas en `test/calendario.test.ts`) y abre un PR.
+
+Estado de 2027 al 3 de octubre de 2026:
+
+| Institución | Calendario 2027 | En el CSV |
+|---|---|---|
+| INEGI | Primer semestre publicado (`cal_2027.pdf`) | Sí, enero a junio |
+| Fed | Reuniones publicadas | Sí: 8 decisiones y sus minutas (tres semanas después, 14:00 del este) |
+| Banxico | Solo la minuta del 7 de enero (calendario 2026, nota 5) | Sí |
+| BLS, BEA, Census | Pendientes (suelen publicarse entre noviembre y diciembre) | No |
+| Banxico (decisiones, informes, remesas), SHCP, IMEF, ISM, ADP, Libro Beige | Pendientes | No |
+
 ## Corrección manual (respaldo)
 
 Se usa casi nunca, porque cada cambio en `main` es un deploy (15 créditos).
@@ -296,6 +349,7 @@ Plan Personal: 1,000 créditos al mes compartidos por todo el equipo. En este pl
 | Corridas con consultas | ~16 publicaciones con hora al mes, casi todas resueltas en pocos minutos | ~1 (hasta ~15 si todas se retrasan) |
 | Consenso con Claude | ~16 días con eventos × ~90 s de espera | ~4 |
 | Peticiones web | Corridas programadas (si cuentan) más la página: ~21,000 × 2 por cada 10,000 | ~4 |
+| Intradía (`/api/tipo-cambio`) | ~1 petición cada 90 s por pestaña abierta, con caché de 1 minuto en la CDN | ~2 por visitante que la tenga abierta todo el día |
 | Ancho de banda | Respuestas 304 sin cuerpo; < 0.1 GB × 20 | < 2 |
 | **Total en operación normal** | | **~15 (peor caso ~30)** |
 | Deploy a producción | 15 por deploy; previews y deploys fallidos no cuestan | Solo cuando cambia el código |

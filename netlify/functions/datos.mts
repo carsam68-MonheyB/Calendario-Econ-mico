@@ -21,17 +21,18 @@ export default async (req: Request) => {
 
   try {
     if (new URL(req.url).pathname === '/api/estado') {
-      const [estado, consenso] = await Promise.all([almacen.leerEstado(), almacen.leerConsenso()]);
-      return Response.json(construirEstado({ estado, consenso, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
+      const [estado, consenso, fix, mercado] = await Promise.all([almacen.leerEstado(), almacen.leerConsenso(), almacen.leerFix(), almacen.leerMercado()]);
+      return Response.json(construirEstado({ estado, consenso, fix, mercado, config, errorCorrecciones, ahora }), { headers: SIN_CACHE });
     }
 
-    const [datos, consenso] = await Promise.all([
+    const [datos, consenso, fix] = await Promise.all([
       almacen.leerDatos(),
       config.modoConsenso === 'ninguna' ? Promise.resolve(null) : almacen.leerConsenso(),
+      almacen.leerFix(),
     ]);
     // La página manda If-None-Match: si nada cambió, se responde 304 sin cuerpo y se ahorra ancho de banda.
     const etag = `W/"${createHash('sha1')
-      .update(JSON.stringify([datos?.actualizado ?? null, config.modoReal, config.modoConsenso, correcciones, consenso?.eventos ?? null]))
+      .update(JSON.stringify([datos?.actualizado ?? null, config.modoReal, config.modoConsenso, correcciones, consenso?.eventos ?? null, fix?.obtenido ?? null]))
       .update(JSON.stringify(cargarCalendario()))
       .digest('base64url')
       .slice(0, 20)}"`;
@@ -46,6 +47,7 @@ export default async (req: Request) => {
       config,
       esConsultable: (fila) => tieneFuente(fila, config.modoReal),
       ahora,
+      fix,
     });
     return Response.json(vista, { headers: { ...SIN_CACHE, ETag: etag } });
   } catch (error) {

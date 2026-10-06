@@ -6,14 +6,14 @@ import { indicadorDe } from '../src/indicadores.ts';
 
 const csv = readFileSync(new URL('../data/calendario.csv', import.meta.url), 'utf8');
 
-test('el calendario tiene las 91 filas y todas son válidas', () => {
+test('el calendario tiene las 179 filas y todas son válidas', () => {
   const filas = leerCalendario(csv);
-  assert.equal(filas.length, 91);
+  assert.equal(filas.length, 179);
   const porTipo = Object.groupBy(filas, (f) => f.tipo);
-  assert.equal(porTipo.pct?.length, 51);
-  assert.equal(porTipo.nivel?.length, 24);
-  assert.equal(porTipo.tasa?.length, 4);
-  assert.equal(porTipo.evento?.length, 12);
+  assert.equal(porTipo.pct?.length, 108);
+  assert.equal(porTipo.nivel?.length, 36);
+  assert.equal(porTipo.tasa?.length, 12);
+  assert.equal(porTipo.evento?.length, 23);
 });
 
 test('solo las tres primeras filas traen esperado y real', () => {

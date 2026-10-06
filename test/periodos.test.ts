@@ -16,6 +16,11 @@ test('meses: el año sale de la fecha de publicación', () => {
   assert.equal(clave(fila('2026-10-02', 'Nómina no agrícola', 'sep', 'nivel', 'US')), '2026-09');
   assert.equal(clave(fila('2026-10-05', 'Consumo privado', 'jul')), '2026-07');
   assert.equal(clave(fila('2027-01-12', 'CPI general anual', 'dic', 'pct', 'US')), '2026-12');
+  // Eventos de 2027 que publican periodos de 2026.
+  assert.equal(clave(fila('2027-01-14', 'Consumo privado', 'oct')), '2026-10');
+  assert.equal(clave(fila('2027-01-29', 'PIB oportuno', '4T')), '2026-T4');
+  assert.equal(clave(fila('2027-03-22', 'Oferta y utilización', '4T', 'evento')), null);
+  assert.equal(clave(fila('2027-04-30', 'PIB oportuno', '1T')), '2027-T1');
 });
 
 test('trimestres', () => {
